@@ -21,9 +21,7 @@ import org.wso2.carbon.utils.CarbonUtils;
 
 import javax.sql.DataSource;
 import javax.xml.bind.JAXBContext;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamReader;
-import java.io.StringReader;
+import java.io.ByteArrayInputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -44,12 +42,8 @@ public class RDBMSDataSourceReader implements DataSourceReader {
 		try {
             xmlConfiguration = CarbonUtils.replaceSystemVariablesInXml(xmlConfiguration);
 		    JAXBContext ctx = JAXBContext.newInstance(RDBMSConfiguration.class);
-			XMLInputFactory inputFactory = XMLInputFactory.newInstance();
-			inputFactory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
-			inputFactory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-			XMLStreamReader xmlReader = inputFactory.createXMLStreamReader(new StringReader(xmlConfiguration));
-
-		    return (RDBMSConfiguration) ctx.createUnmarshaller().unmarshal(xmlReader);
+		    return (RDBMSConfiguration) ctx.createUnmarshaller().unmarshal(
+		    		new ByteArrayInputStream(xmlConfiguration.getBytes()));
 		} catch (Exception e) {
 			throw new DataSourceException("Error in loading RDBMS configuration: " +
 		            e.getMessage(), e);
