@@ -39,6 +39,7 @@ import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.securevault.SecretResolver;
 import org.wso2.securevault.SecretResolverFactory;
+import org.wso2.securevault.commons.MiscellaneousUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -52,6 +53,7 @@ import java.security.PrivateKey;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Properties;
 import java.util.regex.Pattern;
 import javax.crypto.Cipher;
 import javax.xml.namespace.QName;
@@ -62,6 +64,9 @@ public class UserStoreConfigXMLProcessor {
     private static final Log log = LogFactory.getLog(UserStoreConfigXMLProcessor.class);
     private static BundleContext bundleContext;
     private static PrivateKey privateKey = getPrivateKey();
+    private static final String DEFAULT_ALGORITHM = "RSA";
+    private static final String CIPHER_TRANSFORMATION_SECRET_CONF_PROPERTY = "keystore.identity.CipherTransformation";
+    private static final String CIPHER_TRANSFORMATION_SYSTEM_PROPERTY = "org.wso2.CipherTransformation";
     private SecretResolver secretResolver;
     private String filePath = null;
 
@@ -314,7 +319,14 @@ public class UserStoreConfigXMLProcessor {
                             UserCoreConstants.RealmConfig.ATTR_NAME_PROP_NAME)));
                 }
                 try {
-                    Cipher keyStoreCipher = Cipher.getInstance("RSA", "BC");
+                    String carbonHome = System.getProperty("carbon.home");
+                    String filePath =  carbonHome + File.separator + "repository" +
+                            File.separator + "conf" + File.separator +
+                            "security" + File.separator +
+                            "secret-conf.properties";
+                    Properties properties = MiscellaneousUtil.loadProperties(filePath);
+                    String cipherTransformation = getCipherTransformation(properties);
+                    Cipher keyStoreCipher = Cipher.getInstance(cipherTransformation, "BC");
                     privateKey = (privateKey == null) ? getPrivateKey() : privateKey;
                     if (privateKey == null) {
                         throw new org.wso2.carbon.user.api.UserStoreException(
@@ -389,4 +401,27 @@ public class UserStoreConfigXMLProcessor {
         }
         return null;
     }
+
+
+    /**
+     * Get the Cipher Transformation to be used by the Cipher. We have the option of configuring this globally as a
+     * System Property '-Dorg.wso2.CipherTransformation', which can be overridden at the 'secret-conf.properties' level
+     * by specifying the property 'keystore.identity.CipherTransformation'. If neither are configured the default 'RSA'
+     * will be used
+     *
+     * @param properties Properties from the 'secret-conf.properties' file
+     * @return Cipher Transformation String
+     */
+    private String getCipherTransformation(Properties properties) {
+        String cipherTransformation = System.getProperty(CIPHER_TRANSFORMATION_SYSTEM_PROPERTY);
+
+        if (cipherTransformation == null) {
+            cipherTransformation = DEFAULT_ALGORITHM;
+        }
+
+        return MiscellaneousUtil.getProperty(properties, CIPHER_TRANSFORMATION_SECRET_CONF_PROPERTY,
+                cipherTransformation);
+    }
+
+
 }
