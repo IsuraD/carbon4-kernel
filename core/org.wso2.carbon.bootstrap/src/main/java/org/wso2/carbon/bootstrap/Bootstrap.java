@@ -43,8 +43,8 @@ public class Bootstrap {
 
 	private final Set<URL> classpath = new LinkedHashSet<URL>();
 	private static final String CARBON_HOME = "carbon.home";
+    private static final String CARBON_PROPERTIES = "carbon.properties";
 	protected static final String ROOT = System.getProperty(CARBON_HOME, ".");
-	private static final String CARBON_PROPERTIES = "carbon.properties";
 
     public static void main(String args[]) {
         new Bootstrap().loadClass(args);
