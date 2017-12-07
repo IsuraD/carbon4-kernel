@@ -146,7 +146,7 @@ public class ResourceServlet extends HttpServlet {
             response.setHeader(
                         "Content-Disposition",
                         "attachment; filename=" + RegistryUtils.getResourceName(path));
-                response.setContentType("application/force-download");
+            response.setContentType("application/force-download");
 
             InputStream contentStream = null;
             if (resource.getContent() != null) {
