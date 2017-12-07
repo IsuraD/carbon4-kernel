@@ -24,10 +24,10 @@ import org.wso2.carbon.core.encryption.SymmetricEncryption;
 import org.wso2.carbon.core.internal.CarbonCoreDataHolder;
 import org.wso2.carbon.registry.core.service.RegistryService;
 
-import javax.crypto.Cipher;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
+import javax.crypto.Cipher;
 
 /**
  * The utility class to encrypt/decrypt passwords to be stored in the
@@ -116,7 +116,6 @@ public class CryptoUtil {
     public byte[] encrypt(byte[] plainTextBytes) throws CryptoException {
         byte[] encryptedKey;
         SymmetricEncryption encryption = SymmetricEncryption.getInstance();
-
         try {
             if (Boolean.valueOf(encryption.getSymmetricKeyEncryptEnabled())) {
                 encryptedKey = encryption.encryptWithSymmetricKey(plainTextBytes);
@@ -129,15 +128,23 @@ public class CryptoUtil {
                 KeyStore keyStore = keyMan.getPrimaryKeyStore();
                 Certificate[] certs = keyStore.getCertificateChain(keyAlias);
                 String cipherTransformation = System.getProperty(CIPHER_TRANSFORMATION_SYSTEM_PROPERTY);
-
-                if(cipherTransformation != null) {
+                Boolean isCiperTransformEnabled = false;
+                if (cipherTransformation != null) {
                     keyStoreCipher = Cipher.getInstance(cipherTransformation, "BC");
+                    isCiperTransformEnabled = true;
                 } else {
                     keyStoreCipher = Cipher.getInstance("RSA", "BC");
                 }
 
                 keyStoreCipher.init(Cipher.ENCRYPT_MODE, certs[0].getPublicKey());
-                encryptedKey = keyStoreCipher.doFinal(plainTextBytes);
+                if (isCiperTransformEnabled && plainTextBytes.length == 0) {
+                    encryptedKey = "".getBytes();
+                    if (log.isDebugEnabled()) {
+                        log.debug("Empty value for plainTextBytes null will persist to DB");
+                    }
+                } else {
+                    encryptedKey = keyStoreCipher.doFinal(plainTextBytes);
+                }
             }
         } catch (Exception e) {
             throw new
@@ -183,15 +190,24 @@ public class CryptoUtil {
                 PrivateKey privateKey = (PrivateKey) keyStore.getKey(keyAlias,
                         keyPass.toCharArray());
                 String cipherTransformation = System.getProperty(CIPHER_TRANSFORMATION_SYSTEM_PROPERTY);
-
-                if(cipherTransformation != null) {
+                Boolean isCiperTransformEnabled = false;
+                if (cipherTransformation != null) {
                     keyStoreCipher = Cipher.getInstance(cipherTransformation, "BC");
+                    isCiperTransformEnabled = true;
                 } else {
                     keyStoreCipher = Cipher.getInstance("RSA", "BC");
                 }
 
                 keyStoreCipher.init(Cipher.DECRYPT_MODE, privateKey);
-                decyptedValue = keyStoreCipher.doFinal(cipherTextBytes);
+
+                if (isCiperTransformEnabled && cipherTextBytes.length == 0) {
+                    decyptedValue = "".getBytes();
+                    if (log.isDebugEnabled()) {
+                        log.debug("Empty value for plainTextBytes null will persist to DB");
+                    }
+                } else {
+                    decyptedValue = keyStoreCipher.doFinal(cipherTextBytes);
+                }
             }
         } catch (Exception e) {
             throw new CryptoException("errorDuringDecryption", e);
