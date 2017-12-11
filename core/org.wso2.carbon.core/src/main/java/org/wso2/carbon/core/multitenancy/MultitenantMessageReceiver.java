@@ -167,10 +167,7 @@ public class MultitenantMessageReceiver implements MessageReceiver {
                                 mainInMsgContext.getProperty(MultitenantConstants.PASS_THROUGH_SOURCE_CONNECTION));
                     }
 
-                    if (mainInMsgContext.getProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED) != null) {
-                        tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED,
-                                mainInMsgContext.getProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED));
-                    }
+                    tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED, Boolean.FALSE);
                     tenantResponseMsgCtx.setProperty(MultitenantConstants.CONTENT_TYPE,
                                 mainInMsgContext.getProperty(MultitenantConstants.CONTENT_TYPE));
                     AxisEngine.receive(tenantResponseMsgCtx);
