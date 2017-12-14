@@ -746,6 +746,7 @@ public class MultitenantMessageReceiver implements MessageReceiver {
 
     /***
      * Validates whether a HTTP Request for outgoing messages
+     *
      * @param messageContext Axis2 Message context
      * @return {boolean} Whether current message is HTTP/HTTPS
      */
