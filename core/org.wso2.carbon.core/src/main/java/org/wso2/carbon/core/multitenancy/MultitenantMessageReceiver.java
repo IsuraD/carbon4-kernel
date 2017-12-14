@@ -51,14 +51,14 @@ import org.wso2.carbon.core.multitenancy.utils.TenantAxisUtils;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 import org.wso2.carbon.utils.multitenancy.MultitenantUtils;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.Map;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 
 /**
  * This MessageReceiver will try to locate the tenant specific AxisConfiguration and dispatch the
@@ -167,7 +167,15 @@ public class MultitenantMessageReceiver implements MessageReceiver {
                                 mainInMsgContext.getProperty(MultitenantConstants.PASS_THROUGH_SOURCE_CONNECTION));
                     }
 
-                    tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED, Boolean.FALSE);
+                    if (isHTTPOrHTTPsRequest(mainInMsgContext)) {
+                        tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED, Boolean.FALSE);
+
+                    } else {
+                        if (mainInMsgContext.getProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED) != null) {
+                            tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED,
+                                    mainInMsgContext.getProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED));
+                        }
+                    }
                     tenantResponseMsgCtx.setProperty(MultitenantConstants.CONTENT_TYPE,
                                 mainInMsgContext.getProperty(MultitenantConstants.CONTENT_TYPE));
                     AxisEngine.receive(tenantResponseMsgCtx);
@@ -735,5 +743,22 @@ public class MultitenantMessageReceiver implements MessageReceiver {
             return msgContext.getTo();
         }
         return null;
+    }
+
+    /***
+     * Validates whether a HTTP Request for outgoing messages
+     * @param messageContext Axis2 Message context
+     * @return {boolean} Whether current message is HTTP/HTTPS
+     */
+    protected static boolean isHTTPOrHTTPsRequest(org.apache.axis2.context.MessageContext messageContext) {
+        if (messageContext.getTransportOut() != null) {
+            String incomingTransportName = String.valueOf(messageContext.getTransportOut().getName());
+            if (incomingTransportName.equals("http")) {
+                return true;
+            } else if (incomingTransportName.equals("https")) {
+                return true;
+            }
+        }
+        return false;
     }
 }
