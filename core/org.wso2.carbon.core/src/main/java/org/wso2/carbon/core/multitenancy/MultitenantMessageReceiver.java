@@ -169,7 +169,6 @@ public class MultitenantMessageReceiver implements MessageReceiver {
 
                     if (isHTTPOrHTTPsRequest(mainInMsgContext)) {
                         tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED, Boolean.FALSE);
-
                     } else {
                         if (mainInMsgContext.getProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED) != null) {
                             tenantResponseMsgCtx.setProperty(MultitenantConstants.MESSAGE_BUILDER_INVOKED,
