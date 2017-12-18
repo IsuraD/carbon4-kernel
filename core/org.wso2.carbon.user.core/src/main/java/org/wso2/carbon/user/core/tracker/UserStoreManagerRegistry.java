@@ -65,11 +65,10 @@ public class UserStoreManagerRegistry extends UserStoreMgtDSComponent {
 
         for (int i = 0; i < length; i++) {
             userStoreManager = (UserStoreManager) objects[i];
-            if (userStoreManager.getDefaultUserStoreProperties() != null) {
-                userStoreProperties = userStoreManager.getDefaultUserStoreProperties();
+            Properties defaultUserStoreProperties = userStoreManager.getDefaultUserStoreProperties();
+            if (defaultUserStoreProperties != null) {
+                userStoreProperties = defaultUserStoreProperties;
                 userStoreManagers.put(userStoreManager.getClass().getName(), userStoreProperties);
-            } else {
-
             }
 
         }
