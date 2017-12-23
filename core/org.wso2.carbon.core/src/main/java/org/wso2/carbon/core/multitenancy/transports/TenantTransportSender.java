@@ -237,10 +237,7 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
             superTenantOutMessageContext.setProperty(NO_ENTITY_BODY, msgContext.getProperty(NO_ENTITY_BODY));
         }
 
-        if (msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD) != null) {
-            superTenantOutMessageContext
-                    .setProperty(DELETE_REQUEST_WITH_PAYLOAD, msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD));
-        }
+        setDeleteRequestWithPayloadProperty(superTenantOutMessageContext, msgContext);
 
         EndpointReference epr = getDestinationEPR(msgContext);
         // this is a request message so we need to set the response message context
@@ -315,5 +312,19 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
             return msgContext.getTo();
         }
         return null;
+    }
+
+    /**
+     * Set property DELETE_REQUEST_WITH_PAYLOAD to superTenantOutMessageContext.
+     *
+     * @param superTenantOutMessageContext message context to be send out
+     * @param msgContext                   message context coming in
+     */
+    protected void setDeleteRequestWithPayloadProperty(MessageContext superTenantOutMessageContext,
+            MessageContext msgContext) {
+        if (msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD) != null) {
+            superTenantOutMessageContext
+                    .setProperty(DELETE_REQUEST_WITH_PAYLOAD, msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD));
+        }
     }
 }
