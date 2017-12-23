@@ -54,6 +54,7 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
     private static final String EXCESS_TRANSPORT_HEADERS = "EXCESS_TRANSPORT_HEADERS";
     private static final String FORCE_SC_ACCEPTED = "FORCE_SC_ACCEPTED";
     private static final String FORCE_POST_PUT_NOBODY = "FORCE_POST_PUT_NOBODY";
+    private static final String DELETE_REQUEST_WITH_PAYLOAD = "DELETE_REQUEST_WITH_PAYLOAD";
 
     public TenantTransportSender(ConfigurationContext superTenantConfigurationContext) {
         this.superTenantConfigurationContext = superTenantConfigurationContext;
@@ -177,7 +178,6 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
                 contentLengthCopy);
 
 
-
         superTenantOutMessageContext.setProperty(Constants.Configuration.MESSAGE_TYPE,
                 msgContext.getProperty(Constants.Configuration.MESSAGE_TYPE));
 
@@ -235,6 +235,11 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
 
         if (msgContext.getProperty(NO_ENTITY_BODY) != null) {
             superTenantOutMessageContext.setProperty(NO_ENTITY_BODY, msgContext.getProperty(NO_ENTITY_BODY));
+        }
+
+        if (msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD) != null) {
+            superTenantOutMessageContext
+                    .setProperty(DELETE_REQUEST_WITH_PAYLOAD, msgContext.getProperty(DELETE_REQUEST_WITH_PAYLOAD));
         }
 
         EndpointReference epr = getDestinationEPR(msgContext);
