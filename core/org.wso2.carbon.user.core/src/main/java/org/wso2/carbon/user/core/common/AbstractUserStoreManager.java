@@ -24,6 +24,7 @@ import org.wso2.carbon.CarbonConstants;
 import org.wso2.carbon.context.CarbonContext;
 import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.core.listener.SecretHandleableListener;
+import org.wso2.carbon.user.core.util.UserOperationsAuditLogger;
 import org.wso2.carbon.utils.Secret;
 import org.wso2.carbon.user.core.Permission;
 import org.wso2.carbon.user.core.UserCoreConstants;
@@ -65,12 +66,17 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.wso2.carbon.user.core.util.UserOperationsAuditLogger.ActionResult.SUCCESS;
+import static org.wso2.carbon.user.core.util.UserOperationsAuditLogger.USER_OPERATION_ADD_ROLE;
+import static org.wso2.carbon.user.core.util.UserOperationsAuditLogger.USER_OPERATION_DELETE_ROLE;
+import static org.wso2.carbon.user.core.util.UserOperationsAuditLogger.USER_OPERATION_UPDATE_ROLES_OF_USER;
+import static org.wso2.carbon.user.core.util.UserOperationsAuditLogger.USER_OPERATION_UPDATE_USERS_OF_ROLE;
 
 public abstract class AbstractUserStoreManager implements UserStoreManager {
 
@@ -100,7 +106,8 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
     private static final String INVALID_PASSWORD = "PasswordInvalid";
     private static final String PROPERTY_PASSWORD_ERROR_MSG = "PasswordJavaRegExViolationErrorMsg";
     private static final String MULTI_ATTRIBUTE_SEPARATOR = "MultiAttributeSeparator";
-    private static Log log = LogFactory.getLog(AbstractUserStoreManager.class);
+    private static final Log log = LogFactory.getLog(AbstractUserStoreManager.class);
+
     protected int tenantId;
     protected DataSource dataSource = null;
     protected RealmConfiguration realmConfig = null;
@@ -1797,6 +1804,9 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
                         deletedUsers, newUsers);
             }
             clearUserRolesCacheByTenant(this.tenantId);
+
+            UserOperationsAuditLogger.log(USER_OPERATION_UPDATE_USERS_OF_ROLE, roleName,
+                    "Users : " + Arrays.toString(newUsers), SUCCESS);
             return;
         }
 
@@ -1804,6 +1814,9 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
             systemUserRoleManager.updateUserListOfSystemRole(userStore.getDomainFreeName(),
                     UserCoreUtil.removeDomainFromNames(deletedUsers),
                     UserCoreUtil.removeDomainFromNames(newUsers));
+
+            UserOperationsAuditLogger.log(USER_OPERATION_UPDATE_USERS_OF_ROLE, roleName,
+                    "Users : " + Arrays.toString(newUsers), SUCCESS);
             return;
         }
 
@@ -1933,6 +1946,7 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
         List<String> roleDel = new ArrayList<String>();
         List<String> roleNew = new ArrayList<String>();
 
+        String[] filteredDeletedRoles = new String[0];
         if (deletedRoles != null && deletedRoles.length > 0) {
             for (String deleteRole : deletedRoles) {
                 if (UserCoreUtil.isEveryoneRole(deleteRole, realmConfig)) {
@@ -1952,9 +1966,10 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
                     roleDel.add(UserCoreUtil.removeDomainFromName(deleteRole));
                 }
             }
-            deletedRoles = roleDel.toArray(new String[roleDel.size()]);
+            filteredDeletedRoles = roleDel.toArray(new String[roleDel.size()]);
         }
 
+        String[] filteredNewRoles = new String[0];
         if (newRoles != null && newRoles.length > 0) {
             for (String newRole : newRoles) {
                 if (UserCoreUtil.isEveryoneRole(newRole, realmConfig)) {
@@ -1973,7 +1988,7 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
                     roleNew.add(UserCoreUtil.removeDomainFromName(newRole));
                 }
             }
-            newRoles = roleNew.toArray(new String[roleNew.size()]);
+            filteredNewRoles = roleNew.toArray(new String[roleNew.size()]);
         }
 
         if (internalRoleDel.size() > 0 || internalRoleNew.size() > 0) {
@@ -1985,16 +2000,18 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
         // #################### <Listeners> #####################################################
         for (UserOperationEventListener listener : UMListenerServiceComponent
                 .getUserOperationEventListeners()) {
-            if (!listener.doPreUpdateRoleListOfUser(userName, deletedRoles, newRoles, this)) {
+            if (!listener.doPreUpdateRoleListOfUser(userName, filteredDeletedRoles, filteredNewRoles, this)) {
                 return;
             }
         }
         // #################### </Listeners> #####################################################
 
-        if ((deletedRoles != null && deletedRoles.length > 0)
-                || (newRoles != null && newRoles.length > 0)) {
+        if ((filteredDeletedRoles != null && filteredDeletedRoles.length > 0)
+                || (filteredNewRoles != null && filteredNewRoles.length > 0)) {
             if (!isReadOnly() && writeGroupsEnabled) {
-                doUpdateRoleListOfUser(userName, deletedRoles, newRoles);
+                doUpdateRoleListOfUser(userName, filteredDeletedRoles, filteredNewRoles);
+                UserOperationsAuditLogger.log(USER_OPERATION_UPDATE_ROLES_OF_USER, userName,
+                        "Roles : " + Arrays.toString(newRoles), SUCCESS);
             } else {
                 throw new UserStoreException("Read-only user store. Cannot add/modify roles.");
             }
@@ -2005,7 +2022,7 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
         // #################### <Listeners> #####################################################
         for (UserOperationEventListener listener : UMListenerServiceComponent
                 .getUserOperationEventListeners()) {
-            if (!listener.doPostUpdateRoleListOfUser(userName, deletedRoles, newRoles, this)) {
+            if (!listener.doPostUpdateRoleListOfUser(userName, filteredDeletedRoles, filteredNewRoles, this)) {
                 return;
             }
         }
@@ -2062,6 +2079,10 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
 
             // Need to update user role cache upon update of role names
             clearUserRolesCacheByTenant(this.tenantId);
+
+            UserOperationsAuditLogger.log("Update Role Name", roleName,
+                    "Old : " + roleName + " New : " + newRoleName, SUCCESS);
+
             return;
         }
 //
@@ -2747,6 +2768,14 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
 
         if (userStore.isHybridRole()) {
             doAddInternalRole(roleName, userList, permissions);
+
+            // If permissions are null, make it an empty array for pretty logging.
+            if (permissions == null) {
+                permissions = new org.wso2.carbon.user.api.Permission[0];
+            }
+
+            UserOperationsAuditLogger.log(USER_OPERATION_ADD_ROLE, roleName, "Users : " + Arrays.toString(userList)
+                    + " Permissions : " + Arrays.toString(permissions), SUCCESS);
             return;
         }
 
@@ -2914,6 +2943,9 @@ public abstract class AbstractUserStoreManager implements UserStoreManager {
                 hybridRoleManager.deleteHybridRole(userStore.getDomainFreeName());
             }
             clearUserRolesCacheByTenant(tenantId);
+
+            UserOperationsAuditLogger.log(USER_OPERATION_DELETE_ROLE, roleName, "", SUCCESS);
+
             return;
         }
 //
