@@ -37,6 +37,7 @@ public class UserOperationsAuditLogger {
     public static final String USER_OPERATION_UPDATE_ROLE_NAME = "Update Role Name";
     public static final String USER_OPERATION_UPDATE_USERS_OF_ROLE = "Update Users of Role";
     public static final String USER_OPERATION_UPDATE_ROLES_OF_USER = "Update Roles of User";
+    public static final String USER_OPERATION_UPDATE_PERMISSIONS_OF_ROLE = "Update Permissions of Role";
 
     private static Log AUDIT_LOG = CarbonConstants.AUDIT_LOG;
     private static String AUDIT_MESSAGE = "Initiator : %s | Action : %s | Target : %s | Data : { %s } | Result : %s ";
