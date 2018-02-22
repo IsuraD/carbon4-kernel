@@ -26,8 +26,10 @@ import org.apache.axiom.om.OMFactory;
 import org.apache.axiom.om.impl.builder.StAXOMBuilder;
 import org.apache.axiom.om.util.Base64;
 import org.apache.axiom.om.xpath.AXIOMXPath;
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.jaxen.JaxenException;
 import org.osgi.framework.BundleContext;
 import org.wso2.carbon.CarbonException;
 import org.wso2.carbon.base.api.ServerConfigurationService;
@@ -42,21 +44,28 @@ import org.wso2.carbon.utils.CarbonUtils;
 import org.wso2.securevault.SecretResolver;
 import org.wso2.securevault.SecretResolverFactory;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateEncodingException;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import javax.crypto.BadPaddingException;
@@ -71,10 +80,15 @@ public class UserStoreConfigXMLProcessor {
     private static final Log log = LogFactory.getLog(UserStoreConfigXMLProcessor.class);
     private static BundleContext bundleContext;
     private static PrivateKey privateKey = getPrivateKey();
+    private static Certificate certificate = getCertificate();
     private static final String CIPHER_TRANSFORMATION_SYSTEM_PROPERTY = "org.wso2.CipherTransformation";
     private SecretResolver secretResolver;
     private String filePath = null;
     private Gson gson = new Gson();
+    private boolean isMigrationRequired = false;
+
+    private static final char[] HEX_CHARACTERS = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B',
+                                                            'C', 'D', 'E', 'F'};
 
     public UserStoreConfigXMLProcessor(String path) {
         this.filePath = path;
@@ -154,6 +168,11 @@ public class UserStoreConfigXMLProcessor {
         userStoreClass = userStoreElement.getAttributeValue(new QName(UserCoreConstants.RealmConfig.ATTR_NAME_CLASS));
         userStoreProperties = getChildPropertyElements(userStoreElement, secretResolver);
 
+        // Check whether if it is required to migrate encrypted data
+        if (isMigrationRequired) {
+            // Return null since required to migrate to self-contained ciphertext
+            return null;
+        }
         if (!userStoreProperties.get(UserStoreConfigConstants.DOMAIN_NAME).equalsIgnoreCase(fileName)) {
             throw new UserStoreException("File name is required to be the user store domain name(eg.: wso2.com-->wso2_com.xml).");
         }
@@ -393,6 +412,60 @@ public class UserStoreConfigXMLProcessor {
         return null;
     }
 
+    /**
+     * Function to retrieve certificate
+     */
+    private static Certificate getCertificate() {
+        ServerConfigurationService serverConfigurationService =
+                UserStoreMgtDSComponent.getServerConfigurationService();
+
+        if (serverConfigurationService == null) {
+            String message = "Key store initialization for decrypting secondary store failed due to" +
+                    " serverConfigurationService is null while attempting to decrypt secondary store";
+            log.error(message);
+            return null;
+        }
+
+        String password = serverConfigurationService.getFirstProperty(
+                "Security.KeyStore.Password");
+        String keyAlias = serverConfigurationService.getFirstProperty(
+                "Security.KeyStore.KeyAlias");
+        InputStream in = null;
+        try {
+            KeyStore store = KeyStore.getInstance(
+                    serverConfigurationService.getFirstProperty(
+                            "Security.KeyStore.Type"));
+            String file = new File(serverConfigurationService.getFirstProperty(
+                    "Security.KeyStore.Location")).getAbsolutePath();
+            in = new FileInputStream(file);
+            store.load(in, password.toCharArray());
+
+            return  store.getCertificateChain(keyAlias)[0];
+        } catch (FileNotFoundException e) {
+            String errorMsg = "Keystore File Not Found in configured location";
+            log.error(errorMsg, e);
+        } catch (IOException e) {
+            String errorMsg = "Keystore File IO operation failed";
+            log.error(errorMsg, e);
+        } catch (KeyStoreException e) {
+            String errorMsg = "Faulty keystore";
+            log.error(errorMsg, e);
+        } catch (GeneralSecurityException e) {
+            String errorMsg = "Some parameters assigned to access the " +
+                    "keystore is invalid";
+            log.error(errorMsg, e);
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (IOException e) {
+                    log.error("Error occurred while closing Registry key store file", e);
+                }
+            }
+        }
+        return null;
+    }
+
     private String decryptProperty(String propValue)
             throws NoSuchPaddingException, NoSuchAlgorithmException, NoSuchProviderException,
             org.wso2.carbon.user.api.UserStoreException, InvalidKeyException, BadPaddingException,
@@ -419,6 +492,7 @@ public class UserStoreConfigXMLProcessor {
                 keyStoreCipher = Cipher.getInstance(cipherHolder.getTransformation(), "BC");
                 cipherTextBytes = cipherHolder.getCipherBase64Decoded();
             } else {
+                isMigrationRequired = true;
                 //If custom cipher transformation configured, but still there is old cipher in the system or
                 // encrypted cipher using custom transformation configured in carbon.properties.
                 // Unfortunately we have to check whether the encryption is done in RSA or custom transformation
@@ -456,6 +530,103 @@ public class UserStoreConfigXMLProcessor {
         return new String(keyStoreCipher.doFinal(cipherTextBytes));
     }
 
+    private byte[] encrypt(byte[] plainTextBytes) throws UserStoreException {
+
+        byte[] encryptedKey;
+        certificate = (certificate == null) ? getCertificate() : certificate;
+        if (certificate == null) {
+            throw new UserStoreException("Certificate initialization failed. Cannot encrypt the userstore "
+                    + "sensitive content.");
+        }
+        String cipherTransformation = System.getProperty(CIPHER_TRANSFORMATION_SYSTEM_PROPERTY);
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug("Cipher transformation for encryption : " + cipherTransformation);
+            }
+            Cipher keyStoreCipher = Cipher.getInstance(cipherTransformation, "BC");
+            keyStoreCipher.init(Cipher.ENCRYPT_MODE, certificate.getPublicKey());
+            encryptedKey = keyStoreCipher.doFinal(plainTextBytes);
+            encryptedKey = createSelfContainedCiphertext(encryptedKey, cipherTransformation, certificate);
+        } catch (GeneralSecurityException e) {
+            // Error occurred while encrypting.
+            throw new UserStoreException("Error occurred while encrypting", e);
+        }
+
+        return encryptedKey;
+    }
+
+    /**
+     * This function is added for ondemand data migration for OAEP fix
+     *
+     * @throws UserStoreException
+     * @throws IOException
+     * @throws CarbonException
+     */
+    public RealmConfiguration performUserStoreEncryptionDataMigration() throws UserStoreException, IOException, CarbonException {
+
+        log.info("Start migrating encrypted data of : " + filePath);
+
+        InputStream inStream = null;
+        StAXOMBuilder builder = null;
+        OMElement documentElement = null;
+        byte[] buffer = null;
+
+        // Buffer user store config file content.
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug("Read userstore configuration file : " + filePath);
+            }
+            inStream = new FileInputStream(filePath);
+            buffer = IOUtils.toByteArray(inStream);
+        } catch (FileNotFoundException e) {
+            // Error occurred while reading user store config file
+            throw new UserStoreException("Error occurred while reading user store config file : " + filePath, e);
+        } finally {
+            if (inStream != null) {
+                inStream.close();
+            }
+        }
+
+        OutputStream outputStream = null;
+        try {
+            ByteArrayInputStream inputStreamBuffer = new ByteArrayInputStream(buffer);
+            builder = new StAXOMBuilder(inputStreamBuffer);
+            documentElement = builder.getDocumentElement();
+
+            AXIOMXPath xPath = new AXIOMXPath(UserCoreConstants.RealmConfig.ENCRYPTED_PROPERTIES_XPATH);
+            List encryptedNodes = xPath.selectNodes(documentElement);
+
+            // Decrypt and encrypt as self-contained ciphertext
+            for (Object node : encryptedNodes) {
+                OMElement propElement = (OMElement) node;
+                String decryptedValue = decryptProperty(propElement.getText());
+                propElement.setText(Base64.encode(encrypt(decryptedValue.getBytes())));
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("Write back migrated content back to userstore configuration file : " + filePath);
+            }
+            outputStream = new FileOutputStream(filePath);
+            documentElement.serialize(outputStream);
+        } catch (JaxenException e) {
+            // Error occurred while XPath evaluation
+            throw new UserStoreException("Error occurred while XPath evaluation", e);
+        } catch (GeneralSecurityException | org.wso2.carbon.user.api.UserStoreException e) {
+            // Error occurred while decrypting
+            throw new UserStoreException("Error occurred while decrypting", e);
+        } catch (XMLStreamException e) {
+            // Error occurred while building document element of userstore configuration
+            throw new UserStoreException("Error occurred while building document element of userstore configuration", e);
+        } finally {
+            if (outputStream != null) {
+                outputStream.close();
+            }
+        }
+
+        log.info("Successfully migrated encrypted data of : " + filePath);
+
+        // Rebuild user store configuration from the file.
+        return buildUserStoreConfigurationFromFile();
+    }
 
     /**
      * Function to convert cipher byte array to {@link CipherHolder}.
@@ -474,6 +645,51 @@ public class UserStoreConfigXMLProcessor {
             }
             return null;
         }
+    }
+
+
+    /**
+     * This function will create self-contained ciphertext with metadata
+     *
+     * @param originalCipher ciphertext need to wrap with metadata
+     * @param transformation transformation used to encrypt ciphertext
+     * @param certificate certificate that holds relevant keys used to encrypt
+     * @return setf-contained ciphertext
+     * @throws CertificateEncodingException
+     * @throws NoSuchAlgorithmException
+     */
+    public byte[] createSelfContainedCiphertext(byte[] originalCipher, String transformation, Certificate certificate)
+            throws CertificateEncodingException, NoSuchAlgorithmException {
+
+        CipherHolder cipherHolder = new CipherHolder();
+        cipherHolder.setCipherText(Base64.encode(originalCipher));
+        cipherHolder.setTransformation(transformation);
+        cipherHolder.setThumbPrint(calculateThumbprint(certificate, "SHA-1"), "SHA-1");
+        String cipherWithMetadataStr = gson.toJson(cipherHolder);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Cipher with meta data : " + cipherWithMetadataStr);
+        }
+        return cipherWithMetadataStr.getBytes(Charset.defaultCharset());
+    }
+
+    private String calculateThumbprint(Certificate certificate, String digest)
+            throws NoSuchAlgorithmException, CertificateEncodingException {
+
+        MessageDigest messageDigest = MessageDigest.getInstance(digest);
+        messageDigest.update(certificate.getEncoded());
+        byte[] digestByteArray = messageDigest.digest();
+
+        //convert digest in form of byte array to hex format
+        StringBuffer strBuffer = new StringBuffer();
+
+        for (int i = 0; i < digestByteArray.length; i++) {
+            int leftNibble = (digestByteArray[i] & 0xF0) >> 4;
+            int rightNibble = (digestByteArray[i] & 0x0F);
+            strBuffer.append(HEX_CHARACTERS[leftNibble]).append(HEX_CHARACTERS[rightNibble]);
+        }
+
+        return strBuffer.toString();
     }
 
 

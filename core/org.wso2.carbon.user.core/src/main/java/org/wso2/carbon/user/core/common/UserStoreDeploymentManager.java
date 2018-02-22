@@ -20,6 +20,7 @@ package org.wso2.carbon.user.core.common;
 import org.apache.axis2.deployment.DeploymentException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.CarbonException;
 import org.wso2.carbon.context.CarbonContext;
 import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.core.UserCoreConstants;
@@ -32,6 +33,7 @@ import org.wso2.carbon.user.core.tenant.TenantIdKey;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.regex.Pattern;
 
 public class UserStoreDeploymentManager {
@@ -57,6 +59,15 @@ public class UserStoreDeploymentManager {
                 UserCoreUtil.getRealmService().clearCachedUserRealm(tenantId);
                 TenantCache.getInstance().clearCacheEntry(new TenantIdKey(tenantId));
                 realmConfiguration = userStoreXMLProcessor.buildUserStoreConfigurationFromFile();
+
+                // Check whether it is required to migrate encrypted content to self-contained ciphertext
+                if (realmConfiguration == null) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Encrypted data migration required for: " + absoluteFilePath);
+                    }
+                    realmConfiguration = userStoreXMLProcessor.performUserStoreEncryptionDataMigration();
+                }
+
                 UserRealm userRealm = (UserRealm) CarbonContext.getThreadLocalCarbonContext().getUserRealm();
 
 
@@ -179,7 +190,17 @@ public class UserStoreDeploymentManager {
      * @throws UserStoreException
      */
     public RealmConfiguration getUserStoreConfiguration(String absoluteFilePath) throws UserStoreException {
+
         UserStoreConfigXMLProcessor userStoreXMLProcessor = new UserStoreConfigXMLProcessor(absoluteFilePath);
-        return userStoreXMLProcessor.buildUserStoreConfigurationFromFile();
+        RealmConfiguration realmConfiguration = userStoreXMLProcessor.buildUserStoreConfigurationFromFile();
+        if (realmConfiguration == null) {
+            try {
+                return userStoreXMLProcessor.performUserStoreEncryptionDataMigration();
+            } catch (IOException | CarbonException e) {
+                // Error occurred while migrating encrypted data
+                throw new UserStoreException("Error occurred while migrating encrypted data", e);
+            }
+        }
+        return realmConfiguration;
     }
 }
