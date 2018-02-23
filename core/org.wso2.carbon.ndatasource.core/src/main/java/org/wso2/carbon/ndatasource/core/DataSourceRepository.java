@@ -23,6 +23,7 @@ import org.apache.commons.logging.LogFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.wso2.carbon.context.PrivilegedCarbonContext;
+import org.wso2.carbon.core.util.CryptoUtil;
 import org.wso2.carbon.ndatasource.common.DataSourceConstants;
 import org.wso2.carbon.ndatasource.common.DataSourceConstants.DataSourceStatusModes;
 import org.wso2.carbon.ndatasource.common.DataSourceException;
@@ -403,6 +404,7 @@ public class DataSourceRepository {
 	private DataSourceMetaInfo getDataSourceMetaInfoFromRegistryPath(String path)
 			throws DataSourceException, Exception {
         InputStream in = null;
+        boolean isMigrationRequired = false;
 		try {
 		    this.getRegistry().beginTransaction();
             if (this.getRegistry().resourceExists(path)) {
@@ -418,9 +420,22 @@ public class DataSourceRepository {
                 Document doc = DataSourceUtils.convertToDocument(in);
                 /* only super tenant will lookup secure vault information for system data sources,
 			     * others are not allowed to */
-                DataSourceUtils.secureResolveDocument(doc, false);
+                if (System.getProperty(CryptoUtil.CIPHER_TRANSFORMATION_SYSTEM_PROPERTY) != null) {
+                    isMigrationRequired = DataSourceUtils.secureResolveDocumentAndCheckMigrationRequirement(doc, false);
+                } else {
+                    DataSourceUtils.secureResolveDocument(doc, false);
+                }
+
                 this.getRegistry().commitTransaction();
-			    return (DataSourceMetaInfo) this.getDSMUnmarshaller().unmarshal(doc);
+                DataSourceMetaInfo dsMetaInfo = (DataSourceMetaInfo) this.getDSMUnmarshaller().unmarshal(doc);
+
+                if (isMigrationRequired) {
+                    // Add datasource again to encrypt again as self-contained ciphertext
+                    log.info("Start migrating datasource: " + dsMetaInfo.getName());
+                    this.persistDataSource(dsMetaInfo);
+                    log.info("Migration completed for datasource: " + dsMetaInfo.getName());
+                }
+			    return dsMetaInfo;
 		    } else {
 			    return null;
 		    }

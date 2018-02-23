@@ -16,6 +16,7 @@
 package org.wso2.carbon.ndatasource.core.utils;
 
 import org.apache.axiom.om.OMElement;
+import org.apache.axiom.om.util.Base64;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.w3c.dom.Attr;
@@ -41,12 +42,15 @@ import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import javax.xml.XMLConstants;
 import javax.xml.bind.Marshaller;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.*;
 
 /**
  * Data Sources utility class.
@@ -191,6 +195,61 @@ public class DataSourceUtils {
 			}
 		}
 	}
+
+    /**
+     * This function performs same functionality done by DataSourceUtils#secureLoadElement(Element, boolean)
+     * function. Additionally it returns whether it is required to migrate encrypted data if text content of the element
+     * contains encrypted data
+     *
+     * @param element
+     * @param checkSecureVault
+     * @return true if required to migrate
+     * @throws CryptoException
+     */
+    private static boolean secureLoadElementAndCheckMigrationRequirement(Element element, boolean checkSecureVault)
+            throws CryptoException {
+        boolean isMigrationRequired = false;
+        if (checkSecureVault) {
+            Attr secureAttr = element.getAttributeNodeNS(DataSourceConstants.SECURE_VAULT_NS,
+                    DataSourceConstants.SECRET_ALIAS_ATTR_NAME);
+            if (secureAttr != null) {
+                element.setTextContent(loadFromSecureVault(secureAttr.getValue()));
+                element.removeAttributeNode(secureAttr);
+            }
+        } else {
+            String encryptedStr = element.getAttribute(DataSourceConstants.ENCRYPTED_ATTR_NAME);
+            if (encryptedStr != null) {
+                boolean encrypted = Boolean.parseBoolean(encryptedStr);
+                if (encrypted) {
+                    CryptoUtil cryptoUtil = CryptoUtil
+                            .getDefaultCryptoUtil(DataSourceServiceComponent.getServerConfigurationService(),
+                                    DataSourceServiceComponent.getRegistryService());
+                    byte[] ciphertextBytes = Base64.decode(element.getTextContent());
+                    if (!cryptoUtil.isSelfContainedCipherText(ciphertextBytes)) {
+                        // This ciphertext is not self-contained ciphertext
+                        isMigrationRequired = true;
+                        if (log.isDebugEnabled()) {
+                            log.debug("Required to migrate encrypted data of element : " + element.getTagName());
+                        }
+                    }
+                    // This is not self-contained ciphertext, hence decrypting using RSA transformation
+                    element.setTextContent(new String(cryptoUtil.decrypt(ciphertextBytes)));
+                }
+            }
+        }
+        NodeList childNodes = element.getChildNodes();
+        int count = childNodes.getLength();
+        Node tmpNode;
+        for (int i = 0; i < count; i++) {
+            tmpNode = childNodes.item(i);
+            if (tmpNode instanceof Element) {
+                if (secureLoadElementAndCheckMigrationRequirement((Element) tmpNode, checkSecureVault)) {
+                    isMigrationRequired = true;
+                }
+            }
+        }
+        return isMigrationRequired;
+    }
 	
 	public static void secureSaveElement(Element element) throws CryptoException {
 		String encryptedStr = element.getAttribute(DataSourceConstants.ENCRYPTED_ATTR_NAME);
@@ -225,6 +284,29 @@ public class DataSourceUtils {
 			            e.getMessage(), e);
 			}
 		}
+    }
+
+    /**
+     * This function performs same functionality done by DataSourceUtils#secureResolveDocument(Document, boolean)
+     * function. Additionally it returns whether it is required to migrate encrypted data
+     *
+     * @param doc
+     * @param checkSecureVault
+     * @return returns true if required to migrate
+     * @throws DataSourceException
+     */
+    public static boolean secureResolveDocumentAndCheckMigrationRequirement(Document doc, boolean checkSecureVault)
+            throws DataSourceException {
+        Element element = doc.getDocumentElement();
+        if (element != null) {
+            try {
+                return secureLoadElementAndCheckMigrationRequirement(element, checkSecureVault);
+            } catch (CryptoException e) {
+                throw new DataSourceException("Error in secure load of data source meta info: " +
+                        e.getMessage(), e);
+            }
+        }
+        return false;
     }
 
     public static Document convertToDocument(File file) throws DataSourceException {

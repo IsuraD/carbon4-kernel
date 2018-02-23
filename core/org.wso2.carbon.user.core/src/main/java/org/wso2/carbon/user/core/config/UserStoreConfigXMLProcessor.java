@@ -336,7 +336,6 @@ public class UserStoreConfigXMLProcessor {
      */
     private String resolveEncryption(OMElement propElem) throws org.wso2.carbon.user.api.UserStoreException {
         String propValue = propElem.getText();
-        Cipher keyStoreCipher;
         if (propValue != null) {
             String secretPropName = propElem.getAttributeValue(new QName("encrypted"));
             if (secretPropName != null && secretPropName.equalsIgnoreCase("true")) {
@@ -621,7 +620,8 @@ public class UserStoreConfigXMLProcessor {
                 outputStream.close();
             }
         }
-
+        // Update completion of migration
+        isMigrationRequired = false;
         log.info("Successfully migrated encrypted data of : " + filePath);
 
         // Rebuild user store configuration from the file.
