@@ -18,9 +18,14 @@
 package org.wso2.carbon.core.util;
 
 import org.apache.axis2.AxisFault;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.base.api.ServerConfigurationService;
 import org.wso2.carbon.core.RegistryResources;
 import org.wso2.carbon.core.internal.CarbonCoreDataHolder;
+import org.wso2.carbon.registry.api.Registry;
+import org.wso2.carbon.registry.api.RegistryException;
+import org.wso2.carbon.registry.api.Resource;
 
 import java.io.File;
 import java.security.KeyStore;
@@ -28,6 +33,8 @@ import java.security.cert.Certificate;
 import java.util.Enumeration;
 
 public class KeyStoreUtil {
+
+    private static Log log = LogFactory.getLog(KeyStoreUtil.class);
 
     /**
      * KeyStore name will be here.
@@ -109,6 +116,52 @@ public class KeyStoreUtil {
             String msg = "Could not read certificates from keystore file. ";
             throw new AxisFault(msg + e.getMessage());
         }
+    }
+
+
+    /**
+     * Function to migrate keystore registry entry encrypted data, if required
+     *
+     * Note: This is to migrate encrypted data (using RSA) to latest self-contained ciphertext introduced with OAEP Fix
+     *
+     * @param registry registry
+     * @param resource keystore resource
+     * @return return true if data migration detected and performed
+     */
+    public static boolean migrateKeystoreRegEntry(Registry registry, Resource resource) {
+
+        if (System.getProperty(CryptoUtil.CIPHER_TRANSFORMATION_SYSTEM_PROPERTY) != null && resource != null
+                && registry != null) {
+            CryptoUtil cryptoUtil = CryptoUtil.getDefaultCryptoUtil();
+            String passwordProp = resource.getProperty(RegistryResources.SecurityManagement.PROP_PASSWORD);
+            String privatekeyPassProp = resource
+                    .getProperty(RegistryResources.SecurityManagement.PROP_PRIVATE_KEY_PASS);
+            try {
+                if (!cryptoUtil.base64DecodeAndIsSelfContainedCipherText(passwordProp) || !cryptoUtil
+                        .base64DecodeAndIsSelfContainedCipherText(privatekeyPassProp)) {
+
+                    log.info("Start data migration required resource: " + resource.getPath());
+                    // update the resource
+                    resource.setProperty(RegistryResources.SecurityManagement.PROP_PASSWORD,
+                            cryptoUtil.encryptAndBase64Encode(cryptoUtil.base64DecodeAndDecrypt(passwordProp)));
+                    resource.setProperty(RegistryResources.SecurityManagement.PROP_PRIVATE_KEY_PASS,
+                            cryptoUtil.encryptAndBase64Encode(cryptoUtil.base64DecodeAndDecrypt(privatekeyPassProp)));
+                    registry.put(resource.getPath(), resource);
+                    log.info("Data migration completed for registry resource: " + resource.getPath());
+                    return true;
+                }
+            } catch (CryptoException e) {
+                throw new SecurityException("Error occurred while checking encrypted data migration requirements", e);
+            } catch (RegistryException e) {
+                throw new SecurityException("Error occurred while updating the registry with migrated encrypted data",
+                        e);
+            }
+
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("Data migration NOT required for resource: " + resource.getPath());
+        }
+        return false;
     }
 
 }
