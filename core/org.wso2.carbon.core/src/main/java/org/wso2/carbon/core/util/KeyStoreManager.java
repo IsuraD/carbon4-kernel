@@ -135,6 +135,8 @@ public class KeyStoreManager {
         String path = RegistryResources.SecurityManagement.KEY_STORES + "/" + keyStoreName;
         if (registry.resourceExists(path)) {
             org.wso2.carbon.registry.api.Resource resource = registry.get(path);
+            // OAEP Fix: Data migration check, unfortunately this will cause minor performance hit.
+            KeyStoreUtil.migrateKeystoreRegEntry(registry, resource);
             byte[] bytes = (byte[]) resource.getContent();
             KeyStore keyStore = KeyStore.getInstance(resource
                     .getProperty(RegistryResources.SecurityManagement.PROP_TYPE));
@@ -177,6 +179,8 @@ public class KeyStoreManager {
 
             if (registry.resourceExists(path)) {
                 resource = registry.get(path);
+                // OAEP Fix: Data migration check, unfortunately this will cause minor performance hit.
+                KeyStoreUtil.migrateKeystoreRegEntry(registry, resource);
             } else {
                 throw new SecurityException("Given Key store is not available in registry : " + keyStoreName);
             }
@@ -238,6 +242,8 @@ public class KeyStoreManager {
         String path = RegistryResources.SecurityManagement.KEY_STORES + "/" + keyStoreName;
         if (registry.resourceExists(path)) {
             org.wso2.carbon.registry.api.Resource resource = registry.get(path);
+            // OAEP Fix: Data migration check, unfortunately this will cause minor performance hit.
+            KeyStoreUtil.migrateKeystoreRegEntry(registry, resource);
             CryptoUtil cryptoUtil = CryptoUtil.getDefaultCryptoUtil();
             String encryptedPassword = resource
                     .getProperty(RegistryResources.SecurityManagement.PROP_PASSWORD);
@@ -294,7 +300,8 @@ public class KeyStoreManager {
         outputStream.close();
 
         resource.setContent(outputStream.toByteArray());
-
+        // OAEP Fix: Data migration check, unfortunately this will cause minor performance hit.
+        KeyStoreUtil.migrateKeystoreRegEntry(registry, resource);
         registry.put(path, resource);
         resource.discard();
         updateKeyStoreCache(name, new KeyStoreBean(keyStore, new Date()));
@@ -450,6 +457,8 @@ public class KeyStoreManager {
         try {
             if (loadedKeyStores.containsKey(keyStoreName)) {
                 org.wso2.carbon.registry.api.Resource metaDataResource = registry.get(path);
+                // OAEP Fix: Data migration check, unfortunately this will cause minor performance hit.
+                KeyStoreUtil.migrateKeystoreRegEntry(registry, metaDataResource);
                 KeyStoreBean keyStoreBean = loadedKeyStores.get(keyStoreName);
                 if (keyStoreBean.getLastModifiedDate().equals(metaDataResource.getLastModified())) {
                     cachedKeyStoreValid = true;
