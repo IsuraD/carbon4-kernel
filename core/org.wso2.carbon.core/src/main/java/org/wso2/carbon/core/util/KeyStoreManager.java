@@ -48,6 +48,7 @@ public class KeyStoreManager {
 
     private KeyStore primaryKeyStore = null;
     private KeyStore registryKeyStore = null;
+    private KeyStore internalKeyStore = null;
     private static ConcurrentHashMap<String, KeyStoreManager> mtKeyStoreManagers =
             new ConcurrentHashMap<String, KeyStoreManager>();
     private static Log log = LogFactory.getLog(KeyStoreManager.class);
@@ -342,6 +343,45 @@ public class KeyStoreManager {
             return primaryKeyStore;
         } else {
             throw new CarbonException("Permission denied for accessing primary key store");
+        }
+    }
+
+    /**
+     * Load the internal key store, this is allowed only for the super tenant
+     *
+     * @return internal key store object
+     * @throws Exception Carbon Exception when trying to call this method from a tenant other
+     *                   than tenant 0
+     */
+    public KeyStore getInternalKeyStore() throws Exception {
+
+        if (tenantId == MultitenantConstants.SUPER_TENANT_ID) {
+            if (internalKeyStore == null) {
+                ServerConfigurationService config = this.getServerConfigService();
+                if (config.getFirstProperty(RegistryResources.SecurityManagement.SERVER_INTERNAL_KEYSTORE_FILE) == null) {
+                    return null;
+                }
+                String file = new File(config
+                        .getFirstProperty(RegistryResources.SecurityManagement.SERVER_INTERNAL_KEYSTORE_FILE))
+                        .getAbsolutePath();
+                KeyStore store = KeyStore.getInstance(config
+                        .getFirstProperty(RegistryResources.SecurityManagement.SERVER_INTERNAL_KEYSTORE_TYPE));
+                String password = config
+                        .getFirstProperty(RegistryResources.SecurityManagement.SERVER_INTERNAL_KEYSTORE_PASSWORD);
+                FileInputStream in = null;
+                try {
+                    in = new FileInputStream(file);
+                    store.load(in, password.toCharArray());
+                    internalKeyStore = store;
+                } finally {
+                    if (in != null) {
+                        in.close();
+                    }
+                }
+            }
+            return internalKeyStore;
+        } else {
+            throw new CarbonException("Permission denied for accessing internal key store");
         }
     }
     
