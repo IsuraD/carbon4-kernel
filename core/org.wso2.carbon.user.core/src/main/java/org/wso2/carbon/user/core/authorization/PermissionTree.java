@@ -986,7 +986,19 @@ public class PermissionTree {
                     updatePermissionTreeFromDB();
                     cacheKey = new PermissionTreeCacheKey(cacheIdentifier, tenantId);
                     cacheEntry = new GhostResource<TreeNode>(root);
-                    permissionCache.put(cacheKey, cacheEntry);
+                    try {
+                        permissionCache.put(cacheKey, cacheEntry);
+                    } catch (IllegalStateException e) {
+                        // There is no harm ignoring cache update. as the local cache is already of no use.
+                        // Mis-penalty is low.
+                        String msg = "Error occurred while adding the permission tree to cache while trying to update" +
+                                " resource: " + resourceId + " in tenant: " + tenantId;
+                        log.warn(msg);
+                        if (log.isDebugEnabled()) {
+                            log.debug(msg, e);
+                        }
+                    }
+
                     if (log.isDebugEnabled()) {
                         log.debug("Loaded from database");
                     }
