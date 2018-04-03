@@ -48,18 +48,6 @@ import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.Secret;
 import org.wso2.carbon.utils.UnsupportedSecretTypeException;
 
-import java.nio.ByteBuffer;
-import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import javax.cache.Cache;
 import javax.cache.CacheBuilder;
 import javax.cache.CacheConfiguration;
@@ -79,6 +67,18 @@ import javax.naming.ldap.LdapContext;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import javax.sql.DataSource;
+import java.nio.ByteBuffer;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 import static org.wso2.carbon.user.core.ldap.ActiveDirectoryUserStoreConstants.TRANSFORM_OBJECTGUID_TO_UUID;
 
@@ -475,7 +475,7 @@ public class ReadOnlyLDAPUserStoreManager extends AbstractUserStoreManager {
                     }
                 }
             } else {
-                name = getNameInSpaceForUserName(userName);
+                name = getNameInSpaceForUsernameFromLDAP(userName);
                 try {
                     if (name != null) {
                         // if it is the same user DN found in the cache no need of futher authentication required.
@@ -2117,11 +2117,23 @@ public class ReadOnlyLDAPUserStoreManager extends AbstractUserStoreManager {
      * @throws UserStoreException
      */
     protected String getNameInSpaceForUserName(String userName) throws UserStoreException {
+
         // check the cache first
         LdapName ldn = getFromUserCache(userName);
         if (ldn != null) {
             return ldn.toString();
         }
+
+        return getNameInSpaceForUsernameFromLDAP(userName);
+    }
+
+    /**
+     * This is to search user and retrieve ldap name directly from ldap
+     * @param userName
+     * @return
+     * @throws UserStoreException
+     */
+    protected String getNameInSpaceForUsernameFromLDAP(String userName) throws UserStoreException {
 
         String searchBase = null;
         String userSearchFilter = realmConfig.getUserStoreProperty(LDAPConstants.USER_NAME_SEARCH_FILTER);
@@ -2142,7 +2154,6 @@ public class ReadOnlyLDAPUserStoreManager extends AbstractUserStoreManager {
         searchBase = realmConfig.getUserStoreProperty(LDAPConstants.USER_SEARCH_BASE);
 
         return getNameInSpaceForUserName(userName, searchBase, userSearchFilter);
-
     }
 
     /**
