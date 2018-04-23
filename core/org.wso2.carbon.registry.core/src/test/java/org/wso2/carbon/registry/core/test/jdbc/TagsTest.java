@@ -16,7 +16,12 @@
 
 package org.wso2.carbon.registry.core.test.jdbc;
 
-import org.wso2.carbon.registry.core.*;
+import org.wso2.carbon.registry.core.ActionConstants;
+import org.wso2.carbon.registry.core.Registry;
+import org.wso2.carbon.registry.core.RegistryConstants;
+import org.wso2.carbon.registry.core.Resource;
+import org.wso2.carbon.registry.core.Tag;
+import org.wso2.carbon.registry.core.TaggedResourcePath;
 import org.wso2.carbon.registry.core.exceptions.RegistryException;
 import org.wso2.carbon.registry.core.jdbc.EmbeddedRegistryService;
 import org.wso2.carbon.registry.core.session.UserRegistry;
@@ -162,5 +167,53 @@ public class TagsTest extends BaseTestCase {
         barRegistry.removeTag("/r1", "java");
         Tag[] tags4 = adminRegistry.getTags("/r1");
         assertEquals("There should be 2 taggings on resource '/r1'", 2, tags4[0].getTagCount());
+    }
+
+    public void testDeleteTagCreatedByDifferentUser() throws Exception {
+
+        RealmConfiguration realmConfig = ctx.getRealmService().getBootstrapRealmConfiguration();
+
+        UserRegistry adminRegistry = embeddedRegistryService.
+                getUserRegistry(realmConfig.getAdminUserName(), realmConfig.getAdminPassword());
+        UserRealm adminRealm = adminRegistry.getUserRealm();
+
+        // add first user who can create tag
+        adminRealm.getUserStoreManager().addUser("foo1", "cce123", null, null, null);
+        adminRealm.getAuthorizationManager().
+                authorizeUser("foo1", RegistryConstants.ROOT_PATH, ActionConstants.PUT);
+
+        // user 'foo1' creates tag
+        UserRegistry fooRegistry = embeddedRegistryService.getUserRegistry("foo1", "cce123");
+        String r1Content = "R1";
+        Resource r1 = fooRegistry.newResource();
+        r1.setContent(r1Content.getBytes());
+        fooRegistry.put("/r1", r1);
+        fooRegistry.applyTag("/r1", "java");
+
+        Tag[] tags = fooRegistry.getTags("/r1");
+        assertEquals("There should be 1 tagging on resource '/r1'", 1, tags.length);
+
+        // add second user who can read tags
+        adminRealm.getUserStoreManager().addUser("bar1", "swe123", null, null, null);
+        adminRealm.getAuthorizationManager().
+                authorizeUser("bar1", RegistryConstants.ROOT_PATH + "r1", ActionConstants.GET);
+
+        // second user tries to delete the tag - should be unsuccessful
+        UserRegistry barRegistry = embeddedRegistryService.getUserRegistry("bar1", "swe123");
+        barRegistry.removeTag("/r1", "java");
+        tags = barRegistry.getTags("/r1");
+        // tag should not be deleted, hence still the tag count should be 1
+        assertEquals("There should be 1 tagging on resource '/r1'", 1, tags.length);
+
+        // create third user who can delete tags
+        adminRealm.getUserStoreManager().addUser("foobar", "cce123swe123", null, null, null);
+        adminRealm.getAuthorizationManager().
+                authorizeUser("foobar", RegistryConstants.ROOT_PATH + "r1", ActionConstants.DELETE);
+        // third user deletes tag successfully since he has delete permission
+        UserRegistry fooBarRegistry = embeddedRegistryService.getUserRegistry("foobar", "cce123swe123");
+        fooBarRegistry.removeTag("/r1", "java");
+        tags = fooBarRegistry.getTags("/r1");
+        // tag must be deleted, hence 0 tags
+        assertEquals("There should be 0 tagging on resource '/r1'", 0, tags.length);
     }
 }
