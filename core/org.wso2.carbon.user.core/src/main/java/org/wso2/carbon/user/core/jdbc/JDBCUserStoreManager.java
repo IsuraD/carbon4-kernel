@@ -25,7 +25,6 @@ import org.wso2.carbon.context.CarbonContext;
 import org.wso2.carbon.user.api.Properties;
 import org.wso2.carbon.user.api.Property;
 import org.wso2.carbon.user.api.RealmConfiguration;
-import org.wso2.carbon.utils.Secret;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserRealm;
 import org.wso2.carbon.user.core.UserStoreException;
@@ -40,14 +39,20 @@ import org.wso2.carbon.user.core.tenant.Tenant;
 import org.wso2.carbon.user.core.util.DatabaseUtil;
 import org.wso2.carbon.user.core.util.JDBCRealmUtil;
 import org.wso2.carbon.user.core.util.UserCoreUtil;
+import org.wso2.carbon.utils.Secret;
 import org.wso2.carbon.utils.UnsupportedSecretTypeException;
 import org.wso2.carbon.utils.dbcreator.DatabaseCreator;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
-import javax.sql.DataSource;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.*;
+import java.security.SecureRandom;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLTimeoutException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -59,8 +64,8 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.security.SecureRandom;
 import java.util.Random;
+import javax.sql.DataSource;
 
 public class JDBCUserStoreManager extends AbstractUserStoreManager {
 
@@ -2865,6 +2870,156 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
         properties.setAdvancedProperties(JDBCUserStoreConstants.JDBC_UM_ADVANCED_PROPERTIES.toArray
                 (new Property[JDBCUserStoreConstants.JDBC_UM_ADVANCED_PROPERTIES.size()]));
         return properties;
+    }
+
+    protected Map<String, Map<String, String>> getUsersPropertyValues(List<String> users, String[] propertyNames,
+            String profileName) throws UserStoreException {
+
+        Connection dbConnection = null;
+        String sqlStmt;
+        PreparedStatement prepStmt = null;
+        ResultSet rs = null;
+        String[] propertyNamesSorted = propertyNames.clone();
+        Arrays.sort(propertyNamesSorted);
+
+        Map<String, Map<String, String>> usersPropertyValuesMap = new HashMap<>();
+        try {
+            dbConnection = getDBConnection();
+            StringBuilder usernameParameter = new StringBuilder();
+            if (isCaseSensitiveUsername()) {
+                sqlStmt = realmConfig.getUserStoreProperty(JDBCRealmConstants.GET_USERS_PROPS_FOR_PROFILE);
+                for (int i = 0; i < users.size(); i++) {
+
+                    usernameParameter.append("'").append(users.get(i)).append("'");
+
+                    if (i != users.size() - 1) {
+                        usernameParameter.append(",");
+                    }
+                }
+            } else {
+                sqlStmt = realmConfig.getUserStoreProperty(
+                        JDBCCaseInsensitiveConstants.GET_USERS_PROPS_FOR_PROFILE_CASE_INSENSITIVE);
+                for (int i = 0; i < users.size(); i++) {
+
+                    usernameParameter.append("LOWER('").append(users.get(i)).append("')");
+
+                    if (i != users.size() - 1) {
+                        usernameParameter.append(",");
+                    }
+                }
+            }
+
+            sqlStmt = sqlStmt.replaceFirst("\\?", usernameParameter.toString());
+            prepStmt = dbConnection.prepareStatement(sqlStmt);
+            prepStmt.setString(1, profileName);
+            if (sqlStmt.contains(UserCoreConstants.UM_TENANT_COLUMN)) {
+                prepStmt.setInt(2, tenantId);
+                prepStmt.setInt(3, tenantId);
+            }
+
+            rs = prepStmt.executeQuery();
+            while (rs.next()) {
+                String name = rs.getString(2);
+                if (Arrays.binarySearch(propertyNamesSorted, name) < 0) {
+                    continue;
+                }
+                String username = rs.getString(1);
+                String value = rs.getString(3);
+
+                if (usersPropertyValuesMap.get(username) != null) {
+                    usersPropertyValuesMap.get(username).put(name, value);
+                } else {
+                    Map<String, String> attributes = new HashMap<>();
+                    attributes.put(name, value);
+                    usersPropertyValuesMap.put(username, attributes);
+                }
+            }
+            return usersPropertyValuesMap;
+        } catch (SQLException e) {
+            String errorMessage = "Error Occurred while getting property values";
+            if (log.isDebugEnabled()) {
+                errorMessage = errorMessage + ": " + users;
+            }
+            throw new UserStoreException(errorMessage, e);
+        } finally {
+            DatabaseUtil.closeAllConnections(dbConnection, rs, prepStmt);
+        }
+    }
+
+    protected Map<String, List<String>> doGetExternalRoleListOfUsers(List<String> userNames) throws UserStoreException {
+
+        if (log.isDebugEnabled()) {
+            log.debug("Getting roles of users: " + userNames);
+        }
+
+        String sqlStmt;
+        Map<String, List<String>> rolesListOfUsersMap = new HashMap<>();
+        Connection dbConnection = null;
+        PreparedStatement prepStmt = null;
+        ResultSet rs = null;
+
+        try {
+            dbConnection = getDBConnection();
+            StringBuilder usernameParameter = new StringBuilder();
+            if (isCaseSensitiveUsername()) {
+                sqlStmt = realmConfig.getUserStoreProperty(JDBCRealmConstants.GET_USERS_ROLE);
+                if (sqlStmt == null) {
+                    throw new UserStoreException("The sql statement for retrieving users roles is null");
+                }
+                for (int i = 0; i < userNames.size(); i++) {
+
+                    usernameParameter.append("'").append(userNames.get(i)).append("'");
+
+                    if (i != userNames.size() - 1) {
+                        usernameParameter.append(",");
+                    }
+                }
+            } else {
+                sqlStmt = realmConfig
+                        .getUserStoreProperty(JDBCCaseInsensitiveConstants.GET_USERS_ROLE_CASE_INSENSITIVE);
+                if (sqlStmt == null) {
+                    throw new UserStoreException("The sql statement for retrieving users roles is null");
+                }
+                for (int i = 0; i < userNames.size(); i++) {
+
+                    usernameParameter.append("LOWER('").append(userNames.get(i)).append("')");
+
+                    if (i != userNames.size() - 1) {
+                        usernameParameter.append(",");
+                    }
+                }
+            }
+
+            sqlStmt = sqlStmt.replaceFirst("\\?", usernameParameter.toString());
+            prepStmt = dbConnection.prepareStatement(sqlStmt);
+            if (sqlStmt.contains(UserCoreConstants.UM_TENANT_COLUMN)) {
+                prepStmt.setInt(1, tenantId);
+                prepStmt.setInt(2, tenantId);
+                prepStmt.setInt(3, tenantId);
+            }
+            rs = prepStmt.executeQuery();
+            String domainName = getMyDomainName();
+            while (rs.next()) {
+                String username = UserCoreUtil.addDomainToName(rs.getString(1), domainName);
+                String roleName = UserCoreUtil.addDomainToName(rs.getString(2), domainName);
+                if (rolesListOfUsersMap.get(username) != null) {
+                    rolesListOfUsersMap.get(username).add(roleName);
+                } else {
+                    List<String> roleNames = new ArrayList<>();
+                    roleNames.add(roleName);
+                    rolesListOfUsersMap.put(username, roleNames);
+                }
+            }
+            return rolesListOfUsersMap;
+        } catch (SQLException e) {
+            String errorMessage = "Error Occurred while getting role lists of users";
+            if (log.isDebugEnabled()) {
+                errorMessage = errorMessage + ": " + userNames;
+            }
+            throw new UserStoreException(errorMessage, e);
+        } finally {
+            DatabaseUtil.closeAllConnections(dbConnection, rs, prepStmt);
+        }
     }
 
     protected void doAddSharedRole(String roleName, String[] userList) throws UserStoreException {
