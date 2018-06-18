@@ -718,6 +718,13 @@ public final class AppDeployerUtils {
 
         while (entries.hasMoreElements()) {
             ZipEntry entry = (ZipEntry) entries.nextElement();
+            String canonicalEntryPath = new File(destPath + entry.getName()).getCanonicalPath();
+            String canonicalDirPath = new File(destPath).getCanonicalPath();
+            if(!canonicalEntryPath.startsWith(canonicalDirPath)){
+                throw new DeploymentException("Attempt to upload invalid zip archive with file at " + destPath + entry
+                        .getName() + ". File path is outside target directory.");
+            }
+
             // we don't need to copy the META-INF dir
             if (entry.getName().startsWith("META-INF/")) {
                 continue;
