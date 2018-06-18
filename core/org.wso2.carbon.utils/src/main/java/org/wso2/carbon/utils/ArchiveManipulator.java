@@ -165,6 +165,13 @@ public class ArchiveManipulator {
                 String entryName = entry.getName();
                 File f = new File(extractDir + File.separator + entryName);
 
+                String canonicaltargetDirectoryPath = unzipped.getCanonicalPath();
+                String canonicalFilePath = f.getCanonicalPath();
+                if (!canonicalFilePath.startsWith(canonicaltargetDirectoryPath)) {
+                    throw new IOException("Attempt to upload invalid zip archive with file at " + f + ". File path is " +
+                            "outside target directory");
+                }
+
                 if (entryName.endsWith("/") && !f.exists()) { // this is a
                     // directory
                     if (!f.mkdirs()){
