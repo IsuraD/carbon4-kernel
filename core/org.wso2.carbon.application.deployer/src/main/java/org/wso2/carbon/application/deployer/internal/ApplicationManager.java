@@ -319,8 +319,12 @@ public final class ApplicationManager implements ApplicationManagerService {
      */
     private void revertDeployedArtifacts(CarbonApplication carbonApp,
                                          AxisConfiguration axisConfig) {
-        log.info("Reverting successfully deployed artifcats in this CApp : "
-                 + carbonApp.getAppConfig().getAppNameWithVersion());
+        if (carbonApp.getAppConfig() != null) {
+            log.info("Reverting successfully deployed artifacts in this CApp : "
+                    + carbonApp.getAppConfig().getAppNameWithVersion());
+        } else {
+            log.info("Reverting successfully deployed artifacts in the CApp.");
+        }
         for (AppDeploymentHandler handler : appDeploymentHandlers) {
             try {
                 handler.undeployArtifacts(carbonApp, axisConfig);

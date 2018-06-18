@@ -15,6 +15,7 @@
  */
 package org.wso2.carbon.utils;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -188,6 +189,8 @@ public class FileManipulator {
      * @param directory The directory to be deleted
      */
     public static void deleteDir(String directory) {
-        deleteDir(new File(directory));
+        if (StringUtils.isNotEmpty(directory)) {
+            deleteDir(new File(directory));
+        }
     }
 }
