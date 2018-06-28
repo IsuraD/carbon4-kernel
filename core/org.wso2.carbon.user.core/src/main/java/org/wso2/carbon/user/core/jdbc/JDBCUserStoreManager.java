@@ -18,6 +18,7 @@ z * Copyright 2005-2007 WSO2, Inc. (http://wso2.com)
 package org.wso2.carbon.user.core.jdbc;
 
 import org.apache.axiom.om.util.Base64;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.CarbonConstants;
@@ -60,11 +61,13 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import javax.sql.DataSource;
 
 public class JDBCUserStoreManager extends AbstractUserStoreManager {
@@ -1466,7 +1469,7 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             }
             throw new UserStoreException(msg, e);
         } catch (Exception e) {
-            String errorMessage = "Error occurred while getting database type from DB connection";
+            String errorMessage = "Error occurred while adding role : " + roleName;
             if (log.isDebugEnabled()) {
                 log.debug(errorMessage, e);
             }
@@ -1805,7 +1808,7 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             }
             throw new UserStoreException(msg, e);
         } catch (Exception e) {
-            String errorMessage = "Error occurred while getting database type from DB connection";
+            String errorMessage = "Error occurred while updating user list of role : " + roleName;
             if (log.isDebugEnabled()) {
                 log.debug(errorMessage, e);
             }
@@ -1881,6 +1884,19 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             if (userNames.length > 1) {
                 userName = userNames[1];
             }
+
+            String[] rolesToAdd = new String[0];
+            if (newRoles != null && newRoles.length > 0) {
+                // if user name and role names are prefixed with domain name,
+                // remove the domain name
+
+                RoleBreakdown breakdown = getSharedRoleBreakdown(newRoles);
+                rolesToAdd = breakdown.getRoles();
+
+                if (rolesToAdd.length > 0) {
+                    rolesToAdd = getRolesToAdd(userName, rolesToAdd);
+                }
+            }
             if (deletedRoles != null && deletedRoles.length > 0) {
                 // if user name and role names are prefixed with domain name,
                 // remove the domain name
@@ -1931,17 +1947,12 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             }
 
             if (newRoles != null && newRoles.length > 0) {
-                // if user name and role names are prefixed with domain name,
-                // remove the domain name
 
                 RoleBreakdown breakdown = getSharedRoleBreakdown(newRoles);
-                String[] roles = breakdown.getRoles();
-                // Integer[] tenantIds = breakdown.getTenantIds();
-
                 String[] sharedRoles = breakdown.getSharedRoles();
                 Integer[] sharedTenantIds = breakdown.getSharedTenantids();
 
-                if (roles.length > 0) {
+                if (ArrayUtils.isNotEmpty(rolesToAdd)) {
 
                     if (isCaseSensitiveUsername()) {
                         realmConfig.getUserStoreProperty(JDBCRealmConstants.ADD_ROLE_TO_USER + "-" + type);
@@ -1949,14 +1960,14 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
                         realmConfig.getUserStoreProperty(JDBCCaseInsensitiveConstants.ADD_ROLE_TO_USER_CASE_INSENSITIVE + "-" +
                                 type);
                     }
-                    if (sqlStmt2 == null) {
-                        if (isCaseSensitiveUsername()) {
-                                                        sqlStmt2 = realmConfig.getUserStoreProperty(JDBCRealmConstants.ADD_ROLE_TO_USER);
-                                                    } else {
-                                                        sqlStmt2 = realmConfig.getUserStoreProperty(JDBCCaseInsensitiveConstants
-                                                                        .ADD_ROLE_TO_USER_CASE_INSENSITIVE);
-                                                    }
+
+                    if (isCaseSensitiveUsername()) {
+                        sqlStmt2 = realmConfig.getUserStoreProperty(JDBCRealmConstants.ADD_ROLE_TO_USER);
+                    } else {
+                        sqlStmt2 = realmConfig.getUserStoreProperty(JDBCCaseInsensitiveConstants
+                                .ADD_ROLE_TO_USER_CASE_INSENSITIVE);
                     }
+
                     if (sqlStmt2 == null) {
                         throw new UserStoreException(
                                 "The sql statement for add user to role is null");
@@ -1964,18 +1975,19 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
                     if (sqlStmt2.contains(UserCoreConstants.UM_TENANT_COLUMN)) {
                         if (UserCoreConstants.OPENEDGE_TYPE.equals(type)) {
                             DatabaseUtil.udpateUserRoleMappingInBatchMode(dbConnection, sqlStmt2,
-                                    tenantId, roles,
+                                    tenantId, rolesToAdd,
                                     tenantId, userName,
                                     tenantId);
                         } else {
                             DatabaseUtil.udpateUserRoleMappingInBatchMode(dbConnection, sqlStmt2,
-                                    roles, tenantId,
+                                    rolesToAdd, tenantId,
                                     userName, tenantId,
                                     tenantId);
                         }
                     } else {
                         DatabaseUtil.udpateUserRoleMappingInBatchMode(dbConnection, sqlStmt2, newRoles, userName);
                     }
+
                 }
                 if (sharedRoles.length > 0) {
                     if (isCaseSensitiveUsername()) {
@@ -2003,7 +2015,7 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             }
             throw new UserStoreException(msg, e);
         } catch (Exception e) {
-            String errorMessage = "Error occurred while getting database type from DB connection";
+            String errorMessage = "Error occurred while updating role list of user : " + userName;
             if (log.isDebugEnabled()) {
                 log.debug(errorMessage, e);
             }
@@ -2012,6 +2024,18 @@ public class JDBCUserStoreManager extends AbstractUserStoreManager {
             DatabaseUtil.closeAllConnections(dbConnection);
         }
 
+    }
+
+    private String[] getRolesToAdd(String userName, String[] roles) throws UserStoreException {
+
+        String[] currentRoleListOfUser = doGetExternalRoleListOfUser(userName, "*");
+        if (ArrayUtils.isNotEmpty(currentRoleListOfUser)) {
+            Set<String> currentRoleSet = new HashSet<>(Arrays.asList(currentRoleListOfUser));
+            Set<String> rolesToAdd = new HashSet<>(Arrays.asList(roles));
+            rolesToAdd.removeAll(currentRoleSet);
+            return rolesToAdd.toArray(new String[0]);
+        }
+        return roles;
     }
 
     /**
