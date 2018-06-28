@@ -17,6 +17,7 @@
  */
 package org.wso2.carbon.user.core.hybrid;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.CarbonConstants;
@@ -41,8 +42,10 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.sql.DataSource;
 
 public class HybridRoleManager {
@@ -569,11 +572,16 @@ public class HybridRoleManager {
                 domain = domain.toUpperCase();
             }
 
+            if (ArrayUtils.isNotEmpty(addRoles)) {
+                addRoles = getHybridRolesToAdd(user, addRoles);
+            }
+
             if (deletedRoles != null && deletedRoles.length > 0) {
                 DatabaseUtil.udpateUserRoleMappingInBatchMode(dbConnection, sqlStmt1, deletedRoles,
                         tenantId, UserCoreUtil.removeDomainFromName(user), tenantId, tenantId, domain);
             }
-            if (addRoles != null && addRoles.length > 0) {
+
+            if (ArrayUtils.isNotEmpty(addRoles)) {
                 if (UserCoreConstants.OPENEDGE_TYPE.equals(type)) {
                     sqlStmt2 = HybridJDBCConstants.ADD_ROLE_TO_USER_SQL_OPENEDGE;
                     DatabaseUtil.udpateUserRoleMappingInBatchMode(dbConnection, sqlStmt2, user,
@@ -603,6 +611,26 @@ public class HybridRoleManager {
         if (deletedRoles != null && deletedRoles.length > 0) {
             userRealm.getAuthorizationManager().clearUserAuthorization(user);
         }
+    }
+
+    private String[] getHybridRolesToAdd(String userName, String[] roles) throws UserStoreException {
+
+        String[] currentRoleListOfUser = getHybridRoleListOfUser(userName, "*");
+        if (ArrayUtils.isNotEmpty(currentRoleListOfUser)) {
+            Set<String> currentRoleSet = new HashSet<>();
+
+            for (String role : currentRoleListOfUser) {
+                if (role.startsWith(UserCoreConstants.INTERNAL_DOMAIN + UserCoreConstants.DOMAIN_SEPARATOR)) {
+                    role = UserCoreUtil.removeDomainFromName(role);
+                }
+                currentRoleSet.add(role);
+            }
+
+            Set<String> rolesToAdd = new HashSet<>(Arrays.asList(roles));
+            rolesToAdd.removeAll(currentRoleSet);
+            return rolesToAdd.toArray(new String[0]);
+        }
+        return roles;
     }
 
     /**
