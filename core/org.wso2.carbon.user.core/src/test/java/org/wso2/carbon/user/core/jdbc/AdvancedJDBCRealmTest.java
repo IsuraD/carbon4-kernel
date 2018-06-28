@@ -19,6 +19,8 @@ package org.wso2.carbon.user.core.jdbc;
 
 import junit.framework.TestCase;
 import org.apache.commons.dbcp.BasicDataSource;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.user.api.RealmConfiguration;
 import org.wso2.carbon.user.core.AuthorizationManager;
 import org.wso2.carbon.user.core.BaseTestCase;
@@ -27,21 +29,19 @@ import org.wso2.carbon.user.core.Permission;
 import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.user.core.UserCoreTestConstants;
 import org.wso2.carbon.user.core.UserRealm;
-import org.wso2.carbon.user.core.UserStoreManager;
 import org.wso2.carbon.user.core.UserStoreException;
+import org.wso2.carbon.user.core.UserStoreManager;
 import org.wso2.carbon.user.core.common.DefaultRealm;
-import org.wso2.carbon.user.core.config.TestRealmConfigBuilder;
 import org.wso2.carbon.user.core.config.RealmConfigXMLProcessor;
+import org.wso2.carbon.user.core.config.TestRealmConfigBuilder;
 import org.wso2.carbon.user.core.util.DatabaseUtil;
 import org.wso2.carbon.utils.dbcreator.DatabaseCreator;
+import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.io.File;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 
 public class AdvancedJDBCRealmTest extends BaseTestCase {
@@ -300,6 +300,12 @@ public class AdvancedJDBCRealmTest extends BaseTestCase {
            admin.updateRoleListOfUser("saman", null, new String[] { "role2" });
            admin.updateRoleListOfUser("saman", new String[] { "role2" }, new String[] { "role4",
                    "role3" });
+            try {
+                admin.updateRoleListOfUser("saman", new String[]{"role2"}, new String[]{"role4",
+                        "role3"});
+            } catch (UserStoreException e) {
+                fail("Cannot assign same role to user again.");
+            }
             try{
                admin.updateRoleListOfUser(null, null, new String[] { "role2" });
                fail("Exceptions at missing user name");
