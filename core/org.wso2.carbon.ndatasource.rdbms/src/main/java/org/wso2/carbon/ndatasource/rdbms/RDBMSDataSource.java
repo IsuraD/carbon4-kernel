@@ -15,21 +15,6 @@
  */
 package org.wso2.carbon.ndatasource.rdbms;
 
-import java.lang.management.ManagementFactory;
-import java.sql.SQLException;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-
-import javax.management.InstanceAlreadyExistsException;
-import javax.management.MBeanServer;
-import javax.management.MBeanRegistrationException;
-import javax.management.MalformedObjectNameException;
-import javax.management.NotCompliantMBeanException;
-import javax.management.ObjectName;
-import javax.naming.Reference;
-import javax.naming.StringRefAddr;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.tomcat.jdbc.pool.DataSource;
@@ -37,6 +22,20 @@ import org.apache.tomcat.jdbc.pool.PoolConfiguration;
 import org.wso2.carbon.ndatasource.common.DataSourceException;
 import org.wso2.carbon.ndatasource.core.utils.DataSourceUtils;
 import org.wso2.carbon.ndatasource.rdbms.utils.RDBMSDataSourceUtils;
+
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.MBeanRegistrationException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.NotCompliantMBeanException;
+import javax.management.ObjectName;
+import javax.naming.Reference;
+import javax.naming.StringRefAddr;
+import java.lang.management.ManagementFactory;
+import java.sql.SQLException;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * RDBMS data source implementation.
@@ -50,6 +49,10 @@ public class RDBMSDataSource {
 	private Reference dataSourceFactoryReference;
 	
 	private PoolConfiguration poolProperties;
+
+	private static final String DISABLE_ROLLBACK_ON_RETURN = "ndatasource.disable.rollbackOnReturn";
+
+	private static final String STANDARD_NEW_JDBC_INTERCEPTORS = "ConnectionState;StatementFinalizer;";
 	
 	public RDBMSDataSource(RDBMSConfiguration config) throws DataSourceException {
 		this.poolProperties = RDBMSDataSourceUtils.createPoolConfiguration(config);
@@ -61,7 +64,11 @@ public class RDBMSDataSource {
 		if (jdbcInterceptors == null) {
 			jdbcInterceptors = "";
 		}
-		jdbcInterceptors = RDBMSDataSourceConstants.STANDARD_JDBC_INTERCEPTORS + jdbcInterceptors;
+		if (Boolean.parseBoolean(System.getProperty(DISABLE_ROLLBACK_ON_RETURN))) {
+			jdbcInterceptors = STANDARD_NEW_JDBC_INTERCEPTORS + jdbcInterceptors;
+		} else {
+			jdbcInterceptors = RDBMSDataSourceConstants.STANDARD_JDBC_INTERCEPTORS + jdbcInterceptors;
+		}
 		this.poolProperties.setJdbcInterceptors(jdbcInterceptors);
 	}
 	
