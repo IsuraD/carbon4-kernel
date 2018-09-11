@@ -50,6 +50,10 @@ public class RDBMSDataSource {
 	private Reference dataSourceFactoryReference;
 	
 	private PoolConfiguration poolProperties;
+
+	private static final String DISABLE_ROLLBACK_ON_RETURN = "ndatasource.disable.rollbackOnReturn";
+
+	private static final String STANDARD_NEW_JDBC_INTERCEPTORS = "ConnectionState;StatementFinalizer;";
 	
 	public RDBMSDataSource(RDBMSConfiguration config) throws DataSourceException {
 		this.poolProperties = RDBMSDataSourceUtils.createPoolConfiguration(config);
@@ -61,7 +65,11 @@ public class RDBMSDataSource {
 		if (jdbcInterceptors == null) {
 			jdbcInterceptors = "";
 		}
-		jdbcInterceptors = RDBMSDataSourceConstants.STANDARD_JDBC_INTERCEPTORS + jdbcInterceptors;
+		if (Boolean.parseBoolean(System.getProperty(DISABLE_ROLLBACK_ON_RETURN))) {
+			jdbcInterceptors = STANDARD_NEW_JDBC_INTERCEPTORS + jdbcInterceptors;
+		} else {
+			jdbcInterceptors = RDBMSDataSourceConstants.STANDARD_JDBC_INTERCEPTORS + jdbcInterceptors;
+		}
 		this.poolProperties.setJdbcInterceptors(jdbcInterceptors);
 	}
 	
