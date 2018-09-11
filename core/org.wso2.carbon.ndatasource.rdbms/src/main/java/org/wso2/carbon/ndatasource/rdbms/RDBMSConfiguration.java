@@ -94,7 +94,7 @@ public class RDBMSConfiguration {
 	
 	private Integer suspectTimeout;
 
-	private Integer validationQueryTimeout;
+        private Integer validationQueryTimeout;
 	
 	private Boolean alternateUsernameAllowed;
 	
@@ -104,11 +104,7 @@ public class RDBMSConfiguration {
 
 	private List<DataSourceProperty> databaseProps;
 
-    private Boolean commitOnReturn;
-
-    private Boolean rollbackOnReturn;
-
-    public String getUrl() {
+	public String getUrl() {
 		return url;
 	}
 
@@ -445,31 +441,15 @@ public class RDBMSConfiguration {
 		this.dataSourceProps = dataSourceProps;
 	}
 
-    public Integer getValidationQueryTimeout() {
-        return validationQueryTimeout;
-    }
+        public Integer getValidationQueryTimeout() {
+                return validationQueryTimeout;
+        }
 
-    public void setValidationQueryTimeout(Integer validationQueryTimeout) {
-        this.validationQueryTimeout = validationQueryTimeout;
-    }
+        public void setValidationQueryTimeout(Integer validationQueryTimeout) {
+                this.validationQueryTimeout = validationQueryTimeout;
+        }
 
-    public void setCommitOnReturn(Boolean commitOnReturn) {
-        this.commitOnReturn = commitOnReturn;
-    }
-
-    public Boolean getCommitOnReturn() {
-        return commitOnReturn;
-    }
-
-    public void setRollbackOnReturn(Boolean rollbackOnReturn) {
-        this.rollbackOnReturn = rollbackOnReturn;
-    }
-
-    public Boolean getRollbackOnReturn() {
-        return rollbackOnReturn;
-    }
-
-    @XmlRootElement (name = "password")
+        @XmlRootElement (name = "password")
 	public static class Password {
 		
 		private boolean encrypted = true;
