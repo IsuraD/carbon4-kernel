@@ -243,7 +243,7 @@ public class TenantTransportSender extends AbstractHandler implements TransportS
         }
 
         // set additional multitenant message context properties read from multitenant-msg-context.properties file
-        for (String property: dataHolder.getTenantMsgContextProperties()) {
+        for (String property : dataHolder.getTenantMsgContextProperties()) {
             if (msgContext.getProperty(property) != null) {
                 superTenantOutMessageContext.setProperty(property, msgContext.getProperty(property));
             }
