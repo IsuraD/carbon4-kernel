@@ -44,9 +44,11 @@ import javax.naming.ldap.LdapContext;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -620,34 +622,35 @@ public class LDAPConnectionContext {
         }
 
         if (correlationLog.isInfoEnabled()) {
-            Map<String, String> logPropertiesMap = new LinkedHashMap<>();
-            logPropertiesMap.put(CORRELATION_LOG_TIME_TAKEN_KEY, Long.toString(correlationLogDTO.getDelta()));
-            logPropertiesMap.put(CORRELATION_LOG_CALL_TYPE_KEY, CORRELATION_LOG_CALL_TYPE_VALUE);
-            logPropertiesMap.put(CORRELATION_LOG_START_TIME_KEY, Long.toString(correlationLogDTO.getStartTime()));
-            logPropertiesMap.put(CORRELATION_LOG_METHOD_NAME_KEY, correlationLogDTO.getMethodName());
-            logPropertiesMap.put(CORRELATION_LOG_PROVIDER_URL_KEY, providerUrl);
-            logPropertiesMap.put(CORRELATION_LOG_PRINCIPAL_KEY, principal);
-            logPropertiesMap.put(CORRELATION_LOG_ARGS_LENGTH_KEY, Integer.toString(correlationLogDTO.getArgsLength()));
-            logPropertiesMap.put(CORRELATION_LOG_ARGS_KEY, correlationLogDTO.getArgs());
-            correlationLog.info(createLogFormat(logPropertiesMap));
+            List<String> logPropertiesList = new ArrayList<>();
+            logPropertiesList.add(Long.toString(correlationLogDTO.getDelta()));
+            logPropertiesList.add(CORRELATION_LOG_CALL_TYPE_VALUE);
+            logPropertiesList.add(Long.toString(correlationLogDTO.getStartTime()));
+            logPropertiesList.add(correlationLogDTO.getMethodName());
+            logPropertiesList.add(providerUrl);
+            logPropertiesList.add(principal);
+            logPropertiesList.add(Integer.toString(correlationLogDTO.getArgsLength()));
+            logPropertiesList.add(correlationLogDTO.getArgs());
+            correlationLog.info(createFormattedLog(logPropertiesList));
         }
     }
 
     /**
      * Creates the log line that should be printed
      *
-     * @param logPropertiesMap Contains the type and value that should be printed in the log
+     * @param logPropertiesList Contains the log values that should be printed in the log
      * @return The log line
      */
-    private String createLogFormat(Map<String, String> logPropertiesMap) {
+    private String createFormattedLog(List<String> logPropertiesList) {
 
         StringBuilder sb = new StringBuilder();
-        Object[] keys = logPropertiesMap.keySet().toArray();
-        for (int i = 0; i < keys.length; i++) {
-            sb.append(logPropertiesMap.get(keys[i]));
-            if (i < keys.length - 1) {
+        int count = 0;
+        for (String property : logPropertiesList) {
+            sb.append(property);
+            if (count < logPropertiesList.size() - 1) {
                 sb.append(CORRELATION_LOG_SEPARATOR);
             }
+            count++;
         }
         return sb.toString();
     }
