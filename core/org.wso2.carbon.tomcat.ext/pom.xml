@@ -90,6 +90,17 @@
             <artifactId>junit</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-all</artifactId>
+            <version>${org.mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -113,6 +124,15 @@
                         </Export-Package>
                         <Import-Package>
                             org.apache.tomcat.*
+                            org.apache.commons.logging,
+                            org.slf4j,
+                            javax.servlet,
+                            javax.servlet.http,
+                            com.google.gson,
+                            org.apache.catalina.valves.*,
+                            org.apache.catalina,
+                            org.apache.catalina.connector,
+                            org.apache.commons.lang,
                         </Import-Package>
                         <Import-Package>
                             *;resolution:=optional
