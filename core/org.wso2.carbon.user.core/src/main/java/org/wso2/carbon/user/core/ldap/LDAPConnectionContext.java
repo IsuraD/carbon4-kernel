@@ -74,18 +74,10 @@ public class LDAPConnectionContext {
 
     private static String initialContextFactoryClass = "com.sun.jndi.dns.DnsContextFactory";
 
-    private static final String CORRELATION_LOG_TIME_TAKEN_KEY = "delta";
-    private static final String CORRELATION_LOG_CALL_TYPE_KEY = "callType";
     private static final String CORRELATION_LOG_CALL_TYPE_VALUE = "ldap";
-    private static final String CORRELATION_LOG_START_TIME_KEY = "startTime";
-    private static final String CORRELATION_LOG_METHOD_NAME_KEY = "methodName";
     private static final String CORRELATION_LOG_INITIALIZATION_METHOD_NAME = "initialization";
     private static final String CORRELATION_LOG_INITIALIZATION_ARGS = "empty";
     private static final int CORRELATION_LOG_INITIALIZATION_ARGS_LENGTH = 0;
-    private static final String CORRELATION_LOG_ARGS_KEY = "query";
-    private static final String CORRELATION_LOG_ARGS_LENGTH_KEY = "query";
-    private static final String CORRELATION_LOG_PROVIDER_URL_KEY = "providerUrl";
-    private static final String CORRELATION_LOG_PRINCIPAL_KEY = "principal";
     private static final String CORRELATION_LOG_SEPARATOR = "|";
     private static final String CORRELATION_LOG_SYSTEM_PROPERTY = "enableCorrelationLogs";
 
