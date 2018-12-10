@@ -43,16 +43,7 @@ import javax.naming.Name;
 import javax.naming.NameParser;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
-import javax.naming.directory.Attribute;
-import javax.naming.directory.Attributes;
-import javax.naming.directory.BasicAttribute;
-import javax.naming.directory.BasicAttributes;
-import javax.naming.directory.DirContext;
-import javax.naming.directory.InvalidAttributeIdentifierException;
-import javax.naming.directory.InvalidAttributeValueException;
-import javax.naming.directory.NoSuchAttributeException;
-import javax.naming.directory.SearchControls;
-import javax.naming.directory.SearchResult;
+import javax.naming.directory.*;
 import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -348,7 +339,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
         // assume first search base in case of multiple definitions
         String searchBase = realmConfig.getUserStoreProperty(LDAPConstants.USER_SEARCH_BASE).split("#")[0];
         try {
-            return (DirContext) mainDirContext.lookup(searchBase);
+            return (DirContext) mainDirContext.lookup(escapeDNForSearch(searchBase));
         } catch (NamingException e) {
             String errorMessage = "Can not access the directory context or"
                     + "user already exists in the system";
@@ -584,7 +575,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                 if (log.isDebugEnabled()) {
                     log.debug("Deleting " + userDN + " with search base " + userSearchBase);
                 }
-                subDirContext = (DirContext) mainDirContext.lookup(userSearchBase);
+                subDirContext = (DirContext) mainDirContext.lookup(escapeDNForSearch(userSearchBase));
                 subDirContext.destroySubcontext(userDN);
             }
             removeFromUserCache(userName);
@@ -635,7 +626,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                 searchResult = namingEnumeration.next();
 
                 String dnName = searchResult.getName();
-                subDirContext = (DirContext) dirContext.lookup(searchBase);
+                subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(searchBase));
 
                 byte[] passwordToStore = UserCoreUtil.getPasswordToStore(newCredential, passwordHashMethod, kdcEnabled);
                 try {
@@ -724,7 +715,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                 }
 
                 String dnName = searchResult.getName();
-                subDirContext = (DirContext) dirContext.lookup(searchBase);
+                subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(searchBase));
 
                 byte[] passwordToStore = UserCoreUtil.getPasswordToStore(newCredential, passwordHashMethod, kdcEnabled);
                 try {
@@ -932,7 +923,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
             // update the attributes in the relevant entry of the directory
             // store
 
-            subDirContext = (DirContext) dirContext.lookup(userSearchBase);
+            subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(userSearchBase));
             subDirContext.modifyAttributes(returnedUserEntry, DirContext.REPLACE_ATTRIBUTE,
                     updatedAttributes);
 
@@ -1028,7 +1019,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
             // update the attributes in the relevant entry of the directory
             // store
 
-            subDirContext = (DirContext) dirContext.lookup(userSearchBase);
+            subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(userSearchBase));
             subDirContext.modifyAttributes(returnedUserEntry, DirContext.REPLACE_ATTRIBUTE,
                     updatedAttributes);
 
@@ -1090,7 +1081,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
 
             updatedAttributes.put(currentUpdatedAttribute);
 
-            subDirContext = (DirContext) dirContext.lookup(userSearchBase);
+            subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(userSearchBase));
             subDirContext.modifyAttributes(returnedUserEntry, DirContext.REMOVE_ATTRIBUTE,
                     updatedAttributes);
 
@@ -1149,7 +1140,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                 updatedAttributes.put(currentUpdatedAttribute);
             }
 
-            subDirContext = (DirContext) dirContext.lookup(userSearchBase);
+            subDirContext = (DirContext) dirContext.lookup(escapeDNForSearch(userSearchBase));
             subDirContext.modifyAttributes(returnedUserEntry, DirContext.REMOVE_ATTRIBUTE,
                     updatedAttributes);
 
@@ -1254,7 +1245,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                     groupAttributes.put(memberAttribute);
                 }
 
-                groupContext = (DirContext) mainDirContext.lookup(searchBase);
+                groupContext = (DirContext) mainDirContext.lookup(escapeDNForSearch(searchBase));
                 NameParser ldapParser = groupContext.getNameParser("");
                 /*
                      * Name compoundGroupName = ldapParser.parse(groupNameAttributeName + "=" +
@@ -1596,7 +1587,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
         DirContext groupContext = null;
         try {
             mainDirContext = this.connectionSource.getContext();
-            groupContext = (DirContext) mainDirContext.lookup(searchBase);
+            groupContext = (DirContext) mainDirContext.lookup(escapeDNForSearch(searchBase));
             String memberAttributeName = realmConfig.getUserStoreProperty(LDAPConstants.MEMBERSHIP_ATTRIBUTE);
             Attributes modifyingAttributes = new BasicAttributes(true);
             Attribute memberAttribute = new BasicAttribute(memberAttributeName);
@@ -1741,7 +1732,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
             String groupNameRDN = resultedGroup.getName();
             String newGroupNameRDN = roleNameAttributeName + "=" + newRoleName;
 
-            groupContext = (DirContext) mainContext.lookup(groupSearchBase);
+            groupContext = (DirContext) mainContext.lookup(escapeDNForSearch(groupSearchBase));
             groupContext.rename(groupNameRDN, newGroupNameRDN);
 
             String roleNameWithDomain = UserCoreUtil.addDomainToName(roleName, getMyDomainName());
@@ -1802,7 +1793,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
 
             String groupName = resultedGroup.getName();
 
-            groupContext = (DirContext) mainDirContext.lookup(groupSearchBase);
+            groupContext = (DirContext) mainDirContext.lookup(escapeDNForSearch(groupSearchBase));
             String groupNameAttributeValue = (String) resultedGroup.getAttributes()
                     .get(realmConfig.getUserStoreProperty(LDAPConstants.GROUP_NAME_ATTRIBUTE))
                     .get();
@@ -2307,32 +2298,6 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
 
     }
 
-    /**
-     * This method performs the additional level escaping for ldap search. In ldap search / and " characters
-     * have to be escaped again
-     * @param dn
-     * @return
-     */
-    private String escapeDNForSearch(String dn){
-        boolean replaceEscapeCharacters = true;
-
-        String replaceEscapeCharactersAtUserLoginString = realmConfig
-                .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_REPLACE_ESCAPE_CHARACTERS_AT_USER_LOGIN);
-
-        if (replaceEscapeCharactersAtUserLoginString != null) {
-            replaceEscapeCharacters = Boolean
-                    .parseBoolean(replaceEscapeCharactersAtUserLoginString);
-            if (log.isDebugEnabled()) {
-                log.debug("Replace escape characters configured to: "
-                        + replaceEscapeCharactersAtUserLoginString);
-            }
-        }
-        if (replaceEscapeCharacters) {
-            return dn.replace("\\\\", "\\\\\\").replace("\\\"", "\\\\\"");
-        } else {
-            return dn;
-        }
-    }
     private static void setAdvancedProperty(String name, String displayName, String value,
                                             String description) {
         Property property = new Property(name, value, displayName + "#" + description, null);
