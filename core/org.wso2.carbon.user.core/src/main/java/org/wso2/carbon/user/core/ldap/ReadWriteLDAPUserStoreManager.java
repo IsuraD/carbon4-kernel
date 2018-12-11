@@ -1368,7 +1368,8 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
 
                         // need to update authz cache of user since roles
                         // are deleted
-                        userRealm.getAuthorizationManager().clearUserAuthorization(userName);
+                        String usernameWithDomain = UserCoreUtil.addDomainToName(userName, getMyDomainName());
+                        userRealm.getAuthorizationManager().clearUserAuthorization(usernameWithDomain);
 
                     } else {
                         errorMessage = "The role: " + deletedRole + " does not exist.";
@@ -1491,6 +1492,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                 } else {
                     List<String> newUserList = new ArrayList<String>();
                     List<String> deleteUserList = new ArrayList<String>();
+                    Map<String, String> userDNToUserNameMapping = new HashMap<>();
 
                     if (newUsers != null && newUsers.length != 0) {
                         String invalidUserList = "";
@@ -1529,6 +1531,7 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                                 invalidUserList += deletedUser + ",";
                             } else {
                                 deleteUserList.add(userNameDN);
+                                userDNToUserNameMapping.put(userNameDN, deletedUser);
                             }
                         }
                         if (!StringUtils.isEmpty(invalidUserList)) {
@@ -1545,7 +1548,9 @@ public class ReadWriteLDAPUserStoreManager extends ReadOnlyLDAPUserStoreManager 
                     for (String userNameDN : deleteUserList) {
                         modifyUserInRole(userNameDN, groupName, DirContext.REMOVE_ATTRIBUTE, searchBase);
                         // needs to clear authz cache for deleted users
-                        userRealm.getAuthorizationManager().clearUserAuthorization(userNameDN);
+                        String deletedUser = userDNToUserNameMapping.get(userNameDN);
+                        String deletedUserWithDomain = UserCoreUtil.addDomainToName(deletedUser, getMyDomainName());
+                        userRealm.getAuthorizationManager().clearUserAuthorization(deletedUserWithDomain);
                     }
                 }
             } catch (NamingException e) {
