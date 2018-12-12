@@ -54,7 +54,9 @@ import javax.cache.CacheConfiguration;
 import javax.cache.CacheManager;
 import javax.cache.Caching;
 import javax.naming.AuthenticationException;
+import javax.naming.CompositeName;
 import javax.naming.InvalidNameException;
+import javax.naming.Name;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 import javax.naming.PartialResultException;
@@ -1790,9 +1792,7 @@ public class ReadOnlyLDAPUserStoreManager extends AbstractUserStoreManager {
 
                 Attributes userAttributes;
                 try {
-                    // '\' and '"' characters need another level of escaping before searching
-                    userAttributes = dirContext.getAttributes(user.replace("\\\\", "\\\\\\")
-                            .replace("\\\"", "\\\\\""), returnedAttributes);
+                    userAttributes = dirContext.getAttributes(escapeDNForSearch(user), returnedAttributes);
 
                     String displayName = null;
                     String userName = null;
@@ -3425,25 +3425,10 @@ public class ReadOnlyLDAPUserStoreManager extends AbstractUserStoreManager {
      * @param dn
      * @return
      */
-    private String escapeDNForSearch(String dn){
-        boolean replaceEscapeCharacters = true;
-
-        String replaceEscapeCharactersAtUserLoginString = realmConfig
-                .getUserStoreProperty(UserCoreConstants.RealmConfig.PROPERTY_REPLACE_ESCAPE_CHARACTERS_AT_USER_LOGIN);
-
-        if (replaceEscapeCharactersAtUserLoginString != null) {
-            replaceEscapeCharacters = Boolean
-                    .parseBoolean(replaceEscapeCharactersAtUserLoginString);
-            if (log.isDebugEnabled()) {
-                log.debug("Replace escape characters configured to: "
-                        + replaceEscapeCharactersAtUserLoginString);
-            }
-        }
-        if (replaceEscapeCharacters) {
-            return dn.replace("\\\\", "\\\\\\").replace("\\\"", "\\\\\"");
-        } else {
-            return dn;
-        }
+    protected Name escapeDNForSearch(String dn) throws InvalidNameException {
+        // This is done to escape '/' which is not a LDAP special character but a JNDI special character.
+        // Refer: https://bugs.java.com/bugdatabase/view_bug.do?bug_id=4307193
+        return new CompositeName().add(dn);
     }
 
     private boolean isIgnorePartialResultException() {
