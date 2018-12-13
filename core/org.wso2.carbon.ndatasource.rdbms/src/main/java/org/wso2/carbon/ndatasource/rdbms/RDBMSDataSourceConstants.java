@@ -31,6 +31,8 @@ public class RDBMSDataSourceConstants {
 
 	public static final String CORRELATION_LOG_INTERCEPTOR = "org.wso2.carbon.ndatasource.rdbms.CorrelationLogInterceptor";
 
+	public static final String JDBC_INTERCEPTOR_SEPERATOR = ";";
+
 	public static final class TX_ISOLATION_LEVELS {
 		
 		public static final String NONE = "NONE";
